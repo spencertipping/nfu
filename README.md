@@ -5,7 +5,7 @@ words in a text file, ordered by most common first. In plain shell, you'd write
 this:
 
 ```sh
-$ egrep -o \w+ file | sort | uniq -c | sort -rn | \
+$ egrep -o '\w+' file | sort | uniq -c | sort -rn | \
     perl -ane 'print $x += $F[0], "\t$F[1]\n"' | \
     { echo 'plot "-" with lines'; cat; } | \
     gnuplot -persist
@@ -14,7 +14,7 @@ $ egrep -o \w+ file | sort | uniq -c | sort -rn | \
 And quite frankly, that's ridiculous. Here's what you'd say in `nfu`:
 
 ```sh
-$ egrep -o \w+ file | nfu -gcOs --plot 'with lines'
+$ egrep -o '\w+' file | nfu -gcOsf 0 --plot 'with lines'
 ```
 
 Here's a list of operations supported by `nfu`:
@@ -27,7 +27,8 @@ Here's a list of operations supported by `nfu`:
   it replaces the first column; otherwise your data replaces all values in the
   row.
 - `-f`, `--fields`: Allows you to reorder fields arbitrarily, outputting
-  tab-delimited data.
+  tab-delimited data. Takes a single string of digits, each of which is a
+  zero-based field index.
 - `-g`, `--group`: Pipes data through `sort` to create groups of equivalent
   entries. Assumes lexicographic, not numeric, sort.
 - `-G`, `--rgroup`: Same as `group`, but reverses the sort order.
