@@ -49,8 +49,9 @@ my %functions = (
   delta => sub {
     my $last = 0;
     while (<STDIN>) {
+      chomp;
       my ($x, @xs) = split;
-      print join "\t", $x - $last, @xs;
+      print join("\t", $x - $last, @xs), "\n";
       $last = $x;
     }
   },
@@ -75,6 +76,7 @@ my %functions = (
   sum => sub {
     my $total = 0;
     while (<STDIN>) {
+      chomp;
       my ($x, @xs) = split;
       print join("\t", $total += $x, @xs), "\n";
     }
