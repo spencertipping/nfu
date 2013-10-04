@@ -122,7 +122,7 @@ while (@exploded) {
   } else {
     # We've hit the end of the chain. Preserve stdout, redirect stdin from
     # current reader.
-    dup2(fileno($reader), 0) or die "failed to dup input: $!";
+    dup2(fileno($reader), 0) or die "failed to dup input: $!" if defined $reader;
     $functions{$command}->(@args);
   }
 }
