@@ -1,0 +1,128 @@
+#!/usr/bin/env perl
+# nfu: Command-line numeric fu | Spencer Tipping
+# Licensed under the terms of the MIT source code license
+
+use v5.10;
+use strict;
+use warnings;
+use POSIX qw(dup2);
+
+$|++;
+
+my %explosions = (
+  c => '--count',
+  d => '--delta',
+  e => '--eval',
+  f => '--fields',
+  g => '--group',
+  G => '--rgroup',
+  o => '--order',
+  O => '--rorder',
+  s => '--sum',
+);
+
+my %arity = (
+  count  => 0,
+  delta  => 0,
+  eval   => 1,
+  fields => 1,
+  group  => 0,
+  rgroup => 0,
+  order  => 0,
+  rorder => 0,
+  plot   => 1,
+  sum    => 0,
+);
+
+my %functions = (
+  count  => sub {exec 'uniq', '-c'  or die 'failed to exec "uniq -c"'},
+  group  => sub {exec 'sort'        or die 'failed to exec "sort"'},
+  rgroup => sub {exec 'sort', '-r'  or die 'failed to exec "sort -r"'},
+  order  => sub {exec 'sort', '-n'  or die 'failed to exec "sort -n"'},
+  rorder => sub {exec 'sort', '-rn' or die 'failed to exec "sort -rn"'},
+
+  plot => sub {
+    exec "gnuplot -e \'plot \"-\" @_\' -persist"
+      or die 'failed to exec "gnuplot -persist"';
+  },
+
+  delta => sub {
+    my $last = 0;
+    while (<STDIN>) {
+      my ($x, @xs) = split;
+      print join "\t", $x - $last, @xs;
+      $last = $x;
+    }
+  },
+
+  eval => sub {
+    my $f = eval "sub {\n" . $_[0] . "\n}" or
+            die "failed to compile eval function: $@\n  (code was $_[0])";
+    while (<STDIN>) {
+      chomp;
+      my @xs = split;
+      my @ys = $f->(@xs);
+      print @ys > 1 ? join("\t", @ys)
+                    : join("\t", $ys[0], @xs[1 .. $#xs]), "\n" if @xs;
+    }
+  },
+
+  fields => sub {
+    my @fs = split //, $_[0];
+    chomp, print join("\t", (split)[@fs]), "\n" while <STDIN>;
+  },
+
+  sum => sub {
+    my $total = 0;
+    while (<STDIN>) {
+      my ($x, @xs) = split;
+      print join("\t", $total += $x, @xs), "\n";
+    }
+  },
+);
+
+sub explode {
+  return $_ unless s/^-([^-])/$1/;
+  map {$explosions{$_} // die "unrecognized short option: -$_"} split //;
+}
+
+$SIG{CHLD} = 'IGNORE';
+
+my $reader   = undef;
+my @exploded = map explode, @ARGV;
+while (@exploded) {
+  (my $command = shift @exploded) =~ s/^--//;
+  my  @args    = splice @exploded, 0, $arity{$command};
+
+  # Here's where things get fun. The question right now is, "do we need to
+  # fork, or can we run in-process?" -- i.e. are we in the middle, or at the
+  # end? When we're in the middle, we want to redirect STDOUT to the pipe's
+  # writer and fork; otherwise we run in-process and write directly to the
+  # existing STDOUT.
+  if (@exploded) {
+    # We're in the middle, so allocate a pipe and fork.
+    pipe my($new_reader), my($writer);
+    unless (fork) {
+      # We're the child, so do STDOUT redirection.
+      close $new_reader or die "failed to close pipe reader: $!";
+      dup2(fileno($reader), 0) or die "failed to dup input: $!"
+        if defined $reader;
+      dup2(fileno($writer), 1) or die "failed to dup stdout: $!";
+
+      close $reader or die "failed to close reader: $!" if defined $reader;
+      close $writer or die "failed to close writer: $!";
+
+      # The function here may never return.
+      $functions{$command}->(@args);
+      exit;
+    } else {
+      close $writer or die "failed to close pipe writer: $!";
+      $reader = $new_reader;
+    }
+  } else {
+    # We've hit the end of the chain. Preserve stdout, redirect stdin from
+    # current reader.
+    dup2(fileno($reader), 0) or die "failed to dup input: $!";
+    $functions{$command}->(@args);
+  }
+}
