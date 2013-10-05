@@ -32,6 +32,7 @@ my %arity = (
   order  => 0,
   rorder => 0,
   plot   => 1,
+  poll   => 2,
   sum    => 0,
 );
 
@@ -45,6 +46,11 @@ my %functions = (
   plot => sub {
     exec "gnuplot -e \'plot \"-\" @_\' -persist"
       or die 'failed to exec "gnuplot -persist"';
+  },
+
+  poll => sub {
+    my ($sleep, $command) = @_;
+    system($command), sleep $sleep while 1;
   },
 
   delta => sub {

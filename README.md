@@ -21,14 +21,16 @@ $ egrep -o '\w+' file | nfu -gcOsf 0 --plot 'with lines'
 $ seq 100 | nfu -sp                     # running total of 1 .. 100
 $ seq 50 | nfu -e '$_[0] ** 2' -sp      # running total of 1^2, 2^2, ... 50^2
 $ seq 100 | nfu -sssp                   # third-integral of 1 .. 100
-$ egrep -o '\w' words | nfu -gcO        # letter frequency distribution
+$ egrep -o '\w' words | nfu -gcO        # desc letter frequency distribution
 ```
 
-Here's a list of operations supported by `nfu`:
+## Commands
+`nfu` chains commands together just like a shell pipeline. This means that
+order matters; `nfu -sc` and `nfu -cs` do two completely different things.
 
 - `-c`, `--count`: Pipes data through `uniq -c` to count adjacent, equivalent
   items. You should probably use `-g` before this unless your data is already
-  grouped.
+  grouped or you just want run lengths.
 - `-d`, `--delta`: The inverse of `sum`; returns the difference between
   successive numbers.
 - `-e`, `--eval`: Allows you to transform data with a Perl expression.
@@ -46,3 +48,6 @@ Here's a list of operations supported by `nfu`:
 - `-s`, `--sum`: Takes a running total of the given numbers.
 - `-p`, `--plot`: Plots the input data as-is. You may need to reorder or slice
   fields to get gnuplot to work correctly.
+- `-P`, `--poll`: Takes an interval in seconds and a command, and runs the
+  command forever, sleeping by the interval between runs. You can use this to
+  generate a stream of data.
