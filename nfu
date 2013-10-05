@@ -19,6 +19,7 @@ my %explosions = (
   o => '--order',
   O => '--rorder',
   s => '--sum',
+  p => '--plot',
 );
 
 my %arity = (
