@@ -23,6 +23,7 @@ my %explosions = (
   O => '--rorder',
   s => '--sum',
   p => '--plot',
+  P => '--poll',
 );
 
 my %arity = (
