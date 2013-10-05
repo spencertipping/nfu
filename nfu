@@ -10,12 +10,15 @@ use POSIX qw(dup2);
 $|++;
 
 my %explosions = (
+  a => '--average',
   c => '--count',
   d => '--delta',
   e => '--eval',
   f => '--fields',
   g => '--group',
   G => '--rgroup',
+  l => '--log',
+  L => '--exp',
   o => '--order',
   O => '--rorder',
   s => '--sum',
@@ -23,17 +26,20 @@ my %explosions = (
 );
 
 my %arity = (
-  count  => 0,
-  delta  => 0,
-  eval   => 1,
-  fields => 1,
-  group  => 0,
-  rgroup => 0,
-  order  => 0,
-  rorder => 0,
-  plot   => 1,
-  poll   => 2,
-  sum    => 0,
+  average => 1,
+  count   => 0,
+  delta   => 0,
+  eval    => 1,
+  fields  => 1,
+  group   => 0,
+  rgroup  => 0,
+  log     => 0,
+  exp     => 0,
+  order   => 0,
+  rorder  => 0,
+  plot    => 1,
+  poll    => 2,
+  sum     => 0,
 );
 
 my %functions = (
@@ -42,6 +48,35 @@ my %functions = (
   rgroup => sub {exec 'sort', '-r'  or die 'failed to exec "sort -r"'},
   order  => sub {exec 'sort', '-n'  or die 'failed to exec "sort -n"'},
   rorder => sub {exec 'sort', '-rn' or die 'failed to exec "sort -rn"'},
+
+  average => sub {
+    my $size = $_[0];
+    my ($n, $total) = (0, 0);
+    my @window = ();
+    while (<STDIN>) {
+      chomp;
+      my ($x, @xs) = split;
+      print join("\t", ($total += $x) /
+                       (++$n > $size && $size ? $size : $n), @xs), "\n";
+      $total -= shift @window if $size and push(@window, $x) >= $size;
+    }
+  },
+
+  log => sub {
+    while (<STDIN>) {
+      chomp;
+      my ($x, @xs) = split;
+      print join("\t", log($x), @xs), "\n";
+    }
+  },
+
+  exp => sub {
+    while (<STDIN>) {
+      chomp;
+      my ($x, @xs) = split;
+      print join("\t", exp($x), @xs), "\n";
+    }
+  },
 
   plot => sub {
     exec "gnuplot -e \'plot \"-\" @_\' -persist"

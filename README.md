@@ -28,6 +28,8 @@ $ egrep -o '\w' words | nfu -gcO        # desc letter frequency distribution
 `nfu` chains commands together just like a shell pipeline. This means that
 order matters; `nfu -sc` and `nfu -cs` do two completely different things.
 
+- `-a`, `--average`: Generates a running average of the last N elements. If N =
+  0 or is not provided, then generates a running average of all numbers.
 - `-c`, `--count`: Pipes data through `uniq -c` to count adjacent, equivalent
   items. You should probably use `-g` before this unless your data is already
   grouped or you just want run lengths.
@@ -43,6 +45,8 @@ order matters; `nfu -sc` and `nfu -cs` do two completely different things.
 - `-g`, `--group`: Pipes data through `sort` to create groups of equivalent
   entries. Assumes lexicographic, not numeric, sort.
 - `-G`, `--rgroup`: Same as `group`, but reverses the sort order.
+- `-l`, `--log`: Log-transforms every value.
+- `-L`, `--exp`: Exponent-transforms every value.
 - `-o`, `--order`: Orders elements by numeric value.
 - `-O`, `--rorder`: Same as `order`, but reverses the sort.
 - `-s`, `--sum`: Takes a running total of the given numbers.
