@@ -50,6 +50,8 @@ order matters; `nfu -sc` and `nfu -cs` do two completely different things.
 - `-o`, `--order`: Orders elements by numeric value.
 - `-O`, `--rorder`: Same as `order`, but reverses the sort.
 - `-s`, `--sum`: Takes a running total of the given numbers.
+- `-S`, `--slice`: Takes two numbers: #lines to chop from head, #lines to chop
+  from tail.
 - `-p`, `--plot`: Plots the input data as-is. You may need to reorder or slice
   fields to get gnuplot to work correctly.
 - `-P`, `--poll`: Takes an interval in seconds and a command, and runs the

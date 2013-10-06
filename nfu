@@ -22,6 +22,7 @@ my %explosions = (
   o => '--order',
   O => '--rorder',
   s => '--sum',
+  S => '--slice',
   p => '--plot',
   P => '--poll',
 );
@@ -41,6 +42,7 @@ my %arity = (
   plot    => 1,
   poll    => 2,
   sum     => 0,
+  slice   => 2,
 );
 
 my %functions = (
@@ -60,6 +62,16 @@ my %functions = (
       print join("\t", ($total += $x) /
                        (++$n > $size && $size ? $size : $n), @xs), "\n";
       $total -= shift @window if $size and push(@window, $x) >= $size;
+    }
+  },
+
+  slice => sub {
+    my ($chop_head, $chop_tail) = @_;
+    my @window;
+    my $n = 0;
+    while (<STDIN>) {
+      push @window, $_ if ++$n > $chop_head;
+      print shift @window if @window > $chop_tail;
     }
   },
 
