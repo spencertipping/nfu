@@ -24,6 +24,7 @@ my %explosions = (
   O => '--rorder',
   s => '--sum',
   S => '--slice',
+  q => '--quant',
   p => '--plot',
   P => '--poll',
 );
@@ -45,6 +46,7 @@ my %arity = (
   poll     => 2,
   sum      => 0,
   slice    => 2,
+  quant    => 1,
 );
 
 my %functions = (
@@ -117,6 +119,26 @@ my %functions = (
     }
   },
 
+  sum => sub {
+    my $total = 0;
+    while (<STDIN>) {
+      chomp;
+      my ($x, @xs) = split;
+      print join("\t", $total += $x, @xs), "\n";
+    }
+  },
+
+  quant => sub {
+    my $quantum = $_[0] || 1.0;
+    while (<STDIN>) {
+      chomp;
+      my ($x, @xs) = split;
+      my $sign = $x < 0 ? -1 : 1;
+      print join("\t", int(abs($x) / $quantum + 0.5) * $quantum * $sign, @xs),
+            "\n";
+    }
+  },
+
   eval => sub {
     (my $code = $_[0]) =~ s/%(\d+)/\$_[$1]/g;
     my $f = eval "sub {\n" . $code . "\n}" or
@@ -134,20 +156,11 @@ my %functions = (
     my @fs = split //, $_[0];
     chomp, print join("\t", (split)[@fs]), "\n" while <STDIN>;
   },
-
-  sum => sub {
-    my $total = 0;
-    while (<STDIN>) {
-      chomp;
-      my ($x, @xs) = split;
-      print join("\t", $total += $x, @xs), "\n";
-    }
-  },
 );
 
 sub explode {
   return $_ unless s/^-([^-])/$1/;
-  map {$explosions{$_} // $_} grep length, split /(\d*),?/;
+  map {$explosions{$_} // $_} grep length, split /([.\d]*),?/;
 }
 
 $SIG{CHLD} = 'IGNORE';

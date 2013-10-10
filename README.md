@@ -23,6 +23,8 @@ $ egrep -o '\w+' file | nfu -gcOsf0p 'with lines'
 - `f0` = "field 0", which is what awk calls `$1`
 - `p` = "plot", which uses gnuplot and croaks if you don't have it
 
+Most `nfu` commands operate on the first column, leaving the others untouched.
+
 ## Syntax
 `nfu` accepts both long-form and short-form options, and there are a couple of
 different ways to write numbers. This is especially relevant if you're using
@@ -44,6 +46,7 @@ $ seq 100 | nfu -e 'int log $_[0]'
 $ seq 100 | nfu -e 'int log %0'         # same thing
 $ seq 100 | nfu -le 'int %0'            # same thing
 $ seq 100 | nfu -le int                 # same, but only for one-column input
+$ seq 100 | nfu -lq1                    # almost; q rounds, not truncates
 ```
 
 ## Examples
@@ -56,6 +59,7 @@ $ seq 100 | shuf > data
 $ nfu -a5 < data                        # sliding average of up to 5 elements
 $ nfu -a < data                         # running average of all items so far
 $ nfu -S10,10dp < data                  # remove first/last 10, delta, plot
+$ seq 100 | nfu -lq0.01                 # list of logs, two decimal places
 ```
 
 ## Commands
@@ -88,6 +92,8 @@ order matters; `nfu -sc` and `nfu -cs` do two completely different things.
 - `-P`, `--poll`: Takes an interval in seconds and a command, and runs the
   command forever, sleeping by the interval between runs. You can use this to
   generate a stream of data.
+- `-q`, `--quant`: Quantize each number to the nearest x, which defaults to 1.
+  x can be any positive value.
 - `-s`, `--sum`: Takes a running total of the given numbers.
 - `-S`, `--slice`: Takes two numbers: #lines to chop from head, #lines to chop
   from tail.
