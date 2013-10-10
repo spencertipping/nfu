@@ -11,6 +11,7 @@ $|++;
 
 my %explosions = (
   a => '--average',
+  v => '--variance',
   c => '--count',
   d => '--delta',
   e => '--eval',
@@ -28,21 +29,22 @@ my %explosions = (
 );
 
 my %arity = (
-  average => 1,
-  count   => 0,
-  delta   => 0,
-  eval    => 1,
-  fields  => 1,
-  group   => 0,
-  rgroup  => 0,
-  log     => 0,
-  exp     => 0,
-  order   => 0,
-  rorder  => 0,
-  plot    => 1,
-  poll    => 2,
-  sum     => 0,
-  slice   => 2,
+  average  => 1,
+  variance => 1,
+  count    => 0,
+  delta    => 0,
+  eval     => 1,
+  fields   => 1,
+  group    => 0,
+  rgroup   => 0,
+  log      => 0,
+  exp      => 0,
+  order    => 0,
+  rorder   => 0,
+  plot     => 1,
+  poll     => 2,
+  sum      => 0,
+  slice    => 2,
 );
 
 my %functions = (
@@ -67,6 +69,8 @@ my %functions = (
 
   slice => sub {
     my ($chop_head, $chop_tail) = @_;
+    die "usage: --slice head tail, or -Shead,tail"
+      unless defined $chop_head and defined $chop_tail;
     my @window;
     my $n = 0;
     while (<STDIN>) {
@@ -98,6 +102,8 @@ my %functions = (
 
   poll => sub {
     my ($sleep, $command) = @_;
+    die "usage: --poll sleep-amount 'command ...'"
+      unless defined $sleep and defined $command;
     system($command), sleep $sleep while 1;
   },
 
@@ -112,8 +118,9 @@ my %functions = (
   },
 
   eval => sub {
-    my $f = eval "sub {\n" . $_[0] . "\n}" or
-            die "failed to compile eval function: $@\n  (code was $_[0])";
+    (my $code = $_[0]) =~ s/%(\d+)/\$_[$1]/g;
+    my $f = eval "sub {\n" . $code . "\n}" or
+            die "failed to compile eval function: $@\n  (code was $code)";
     while (<STDIN>) {
       chomp;
       my @xs = split;
@@ -140,16 +147,21 @@ my %functions = (
 
 sub explode {
   return $_ unless s/^-([^-])/$1/;
-  map {$explosions{$_} // die "unrecognized short option: -$_"} split //;
+  map {$explosions{$_} // $_} grep length, split /(\d*),?/;
 }
 
 $SIG{CHLD} = 'IGNORE';
 
 my $reader   = undef;
 my @exploded = map explode, @ARGV;
+
+# Note: the loop below uses pipe/fork/dup2 instead of a more idiomatic Open2
+# call. I don't have a good reason for this other than to figure out how the
+# low-level stuff worked.
 while (@exploded) {
   (my $command = shift @exploded) =~ s/^--//;
-  my  @args    = splice @exploded, 0, $arity{$command};
+  my  $arity   = $arity{$command} // die "undefined command: $command";
+  my  @args    = splice @exploded, 0, $arity;
 
   # Here's where things get fun. The question right now is, "do we need to
   # fork, or can we run in-process?" -- i.e. are we in the middle, or at the
@@ -179,7 +191,8 @@ while (@exploded) {
   } else {
     # We've hit the end of the chain. Preserve stdout, redirect stdin from
     # current reader.
-    dup2(fileno($reader), 0) or die "failed to dup input: $!" if defined $reader;
+    dup2(fileno($reader), 0) or die "failed to dup input: $!"
+      if defined $reader;
     $functions{$command}->(@args);
   }
 }

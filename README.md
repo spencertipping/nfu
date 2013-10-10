@@ -1,27 +1,61 @@
 # nfu: Numeric Fu for your shell
 `nfu` is desgined to do a bunch of common/useful numeric tasks to text-oriented
 data. For example, suppose you want to look at the cumulative distribution of
-words in a text file, ordered by most common first. In plain shell, you'd write
-this:
+words in a text file, ordered by most common first. In plain shell, you'd
+probably write something like this:
 
 ```sh
 $ egrep -o '\w+' file | sort | uniq -c | sort -rn | \
-    perl -ane 'print $x += $F[0], "\t$F[1]\n"' | \
-    gnuplot -e 'plot "-" with lines' -persist
+>   perl -ane 'print $x += $F[0], "\t$F[1]\n"' | \
+>   gnuplot -e 'plot "-" with lines' -persist
 ```
 
-And quite frankly, that's ridiculous. Here's what you'd say in `nfu`:
+Here's what you'd say with `nfu`:
 
 ```sh
-$ egrep -o '\w+' file | nfu -gcOsf 0 --plot 'with lines'
+$ egrep -o '\w+' file | nfu -gcOsf0p 'with lines'
+```
+
+- `g` = "group", which sorts things
+- `c` = "count", which means `uniq -c`
+- `O` = "reverse order", which means `sort -rn`
+- `s` = "sum"
+- `f0` = "field 0", which is what awk calls `$1`
+- `p` = "plot", which uses gnuplot and croaks if you don't have it
+
+## Syntax
+`nfu` accepts both long-form and short-form options, and there are a couple of
+different ways to write numbers. This is especially relevant if you're using
+things like `-S` (`--slice`), which take two numeric arguments:
+
+```sh
+$ nfu --slice 10 10
+$ nfu -S 10 10                          # same thing
+$ nfu -S10,10                           # also the same...
+$ nfu -S10,10p                          # ... but more composable
+$ nfu -a50p                             # works with any numeric-arg command
+```
+
+The other syntactic transformation happens with `-e` (`--eval`), which rewrites
+any `%n` into Perl's more verbose `$_[n]`. As a result:
+
+```sh
+$ seq 100 | nfu -e 'int log $_[0]'
+$ seq 100 | nfu -e 'int log %0'         # same thing
+$ seq 100 | nfu -le 'int %0'            # same thing
+$ seq 100 | nfu -le int                 # same, but only for one-column input
 ```
 
 ## Examples
 ```sh
 $ seq 100 | nfu -sp                     # running total of 1 .. 100
-$ seq 50 | nfu -e '$_[0] ** 2' -sp      # running total of 1^2, 2^2, ... 50^2
+$ seq 50 | nfu -e '%0 ** 2' -sp         # running total of 1^2, 2^2, ... 50^2
 $ seq 100 | nfu -sssp                   # third-integral of 1 .. 100
-$ egrep -o '\w' words | nfu -gcO        # desc letter frequency distribution
+$ egrep -o '\w' words | nfu -gcO        # descending letter frequency distribution
+$ seq 100 | shuf > data
+$ nfu -a5 < data                        # sliding average of up to 5 elements
+$ nfu -a < data                         # running average of all items so far
+$ nfu -S10,10dp < data                  # remove first/last 10, delta, plot
 ```
 
 ## Commands
@@ -49,11 +83,11 @@ order matters; `nfu -sc` and `nfu -cs` do two completely different things.
 - `-L`, `--exp`: Exponent-transforms every value.
 - `-o`, `--order`: Orders elements by numeric value.
 - `-O`, `--rorder`: Same as `order`, but reverses the sort.
-- `-s`, `--sum`: Takes a running total of the given numbers.
-- `-S`, `--slice`: Takes two numbers: #lines to chop from head, #lines to chop
-  from tail.
 - `-p`, `--plot`: Plots the input data as-is. You may need to reorder or slice
   fields to get gnuplot to work correctly.
 - `-P`, `--poll`: Takes an interval in seconds and a command, and runs the
   command forever, sleeping by the interval between runs. You can use this to
   generate a stream of data.
+- `-s`, `--sum`: Takes a running total of the given numbers.
+- `-S`, `--slice`: Takes two numbers: #lines to chop from head, #lines to chop
+  from tail.
