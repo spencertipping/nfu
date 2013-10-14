@@ -76,7 +76,7 @@ order matters; `nfu -sc` and `nfu -cs` do two completely different things.
 - `-e`, `--eval`: Allows you to transform data with a Perl expression.
   Individual fields are available in `@_`. If you return a single value, then
   it replaces the first column; otherwise your data replaces all values in the
-  row.
+  row. If you return an empty list, no output row is generated.
 - `-f`, `--fields`: Allows you to reorder fields arbitrarily, outputting
   tab-delimited data. Takes a single string of digits, each of which is a
   zero-based field index.
