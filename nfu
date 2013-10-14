@@ -72,7 +72,8 @@ my %functions = (
   slice => sub {
     my ($chop_head, $chop_tail) = @_;
     die "usage: --slice head tail, or -Shead,tail"
-      unless defined $chop_head and defined $chop_tail;
+      unless defined $chop_head and defined $chop_tail
+         and $chop_head =~ /^\d+$/ and $chop_tail =~ /^\d+$/;
     my @window;
     my $n = 0;
     while (<STDIN>) {
