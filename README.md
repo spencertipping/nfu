@@ -77,6 +77,8 @@ order matters; `nfu -sc` and `nfu -cs` do two completely different things.
   Individual fields are available in `@_`. If you return a single value, then
   it replaces the first column; otherwise your data replaces all values in the
   row. If you return an empty list, no output row is generated.
+- `-E`, `--every`: Prints every nth line; this gives you a way to sample large
+  datasets.
 - `-f`, `--fields`: Allows you to reorder fields arbitrarily, outputting
   tab-delimited data. Takes a single string of digits, each of which is a
   zero-based field index.
