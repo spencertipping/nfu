@@ -26,6 +26,13 @@ $ egrep -o '\w+' file | nfu -gcOsf0p 'with lines'
 Most `nfu` commands operate on the first column, leaving the others untouched.
 
 ## Syntax
+```sh
+$ nfu [options...] [files...]
+```
+
+`nfu` will automatically uncompress any files ending in `.xz`, `.bz2`, or
+`.gz`, and will behave like `cat` if you give it multiple files.
+
 `nfu` accepts both long-form and short-form options, and there are a couple of
 different ways to write numbers. This is especially relevant if you're using
 things like `-S` (`--slice`), which take two numeric arguments:
