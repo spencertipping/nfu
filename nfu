@@ -62,7 +62,7 @@ my %functions = (
     my $size = $_[0];
     my ($n, $total) = (0, 0);
     my @window = ();
-    while (<STDIN>) {
+    while (<>) {
       chomp;
       my ($x, @xs) = split;
       print join("\t", ($total += $x) /
@@ -78,14 +78,14 @@ my %functions = (
          and $chop_head =~ /^\d+$/ and $chop_tail =~ /^\d+$/;
     my @window;
     my $n = 0;
-    while (<STDIN>) {
+    while (<>) {
       push @window, $_ if ++$n > $chop_head;
       print shift @window if @window > $chop_tail;
     }
   },
 
   log => sub {
-    while (<STDIN>) {
+    while (<>) {
       chomp;
       my ($x, @xs) = split;
       print join("\t", log($x), @xs), "\n";
@@ -93,7 +93,7 @@ my %functions = (
   },
 
   exp => sub {
-    while (<STDIN>) {
+    while (<>) {
       chomp;
       my ($x, @xs) = split;
       print join("\t", exp($x), @xs), "\n";
@@ -114,7 +114,7 @@ my %functions = (
 
   delta => sub {
     my $last = 0;
-    while (<STDIN>) {
+    while (<>) {
       chomp;
       my ($x, @xs) = split;
       print join("\t", $x - $last, @xs), "\n";
@@ -124,7 +124,7 @@ my %functions = (
 
   sum => sub {
     my $total = 0;
-    while (<STDIN>) {
+    while (<>) {
       chomp;
       my ($x, @xs) = split;
       print join("\t", $total += $x, @xs), "\n";
@@ -133,7 +133,7 @@ my %functions = (
 
   quant => sub {
     my $quantum = $_[0] || 1.0;
-    while (<STDIN>) {
+    while (<>) {
       chomp;
       my ($x, @xs) = split;
       my $sign = $x < 0 ? -1 : 1;
@@ -146,7 +146,7 @@ my %functions = (
     (my $code = $_[0]) =~ s/%(\d+)/\$_[$1]/g;
     my $f = eval "sub {\n" . $code . "\n}" or
             die "failed to compile eval function: $@\n  (code was $code)";
-    while (<STDIN>) {
+    while (<>) {
       chomp;
       my @xs = split;
       my @ys = $f->(@xs);
@@ -158,14 +158,14 @@ my %functions = (
   every => sub {
     my ($n) = @_;
     my $i = 0;
-    while (<STDIN>) {
+    while (<>) {
       print unless $i++ % $n;
     }
   },
 
   fields => sub {
     my @fs = split //, $_[0];
-    chomp, print join("\t", (split)[@fs]), "\n" while <STDIN>;
+    chomp, print join("\t", (split)[@fs]), "\n" while <>;
   },
 );
 
@@ -178,21 +178,40 @@ $SIG{CHLD} = 'IGNORE';
 
 my $reader   = undef;
 my @exploded = map explode, @ARGV;
+my @parsed   = ();
+
+@ARGV = ();
+
+# First parse through all of the options, pull out stray files, and replace
+# @ARGV. This enables <> in the worker subs. (The "right way" to do this would
+# be to chain the commands' inputs; then I could remove the branch in the while
+# loop below. But I'm too lazy.)
+while (@exploded) {
+  (my $command = shift @exploded) =~ s/^--//;
+
+  if (defined(my $arity = $arity{$command})) {
+    my @args = splice @exploded, 0, $arity;
+    push @parsed, [$command, @args];
+  } elsif (-f $command) {
+    # It's really a filename, so push it onto @ARGV.
+    push @ARGV, $command;
+  } else {
+    die "nonexistent command/file: $command";
+  }
+}
 
 # Note: the loop below uses pipe/fork/dup2 instead of a more idiomatic Open2
 # call. I don't have a good reason for this other than to figure out how the
 # low-level stuff worked.
-while (@exploded) {
-  (my $command = shift @exploded) =~ s/^--//;
-  my  $arity   = $arity{$command} // die "undefined command: $command";
-  my  @args    = splice @exploded, 0, $arity;
+for (my $i = 0; $i < @parsed; ++$i) {
+  my ($command, @args) = @{$parsed[$i]};
 
   # Here's where things get fun. The question right now is, "do we need to
   # fork, or can we run in-process?" -- i.e. are we in the middle, or at the
   # end? When we're in the middle, we want to redirect STDOUT to the pipe's
   # writer and fork; otherwise we run in-process and write directly to the
   # existing STDOUT.
-  if (@exploded) {
+  if ($i < @parsed - 1) {
     # We're in the middle, so allocate a pipe and fork.
     pipe my($new_reader), my($writer);
     unless (fork) {
