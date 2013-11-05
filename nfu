@@ -193,8 +193,11 @@ while (@exploded) {
     my @args = splice @exploded, 0, $arity;
     push @parsed, [$command, @args];
   } elsif (-f $command) {
-    # It's really a filename, so push it onto @ARGV.
-    push @ARGV, $command;
+    # It's really a filename, so push it onto @ARGV. If it's compressed, run it
+    # through the appropriate decompressor first.
+    push @ARGV, $command =~ s/^(.*\.gz)/zcat $1 |/ri
+                         =~ s/^(.*\.bz2)/bzcat $1 |/ri
+                         =~ s/^(.*\.xz)/xz -dc $1 |/ri;
   } else {
     die "nonexistent command/file: $command";
   }
