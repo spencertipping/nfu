@@ -52,11 +52,35 @@ my %arity = (
 );
 
 my %functions = (
-  count  => sub {exec 'uniq', '-c'  or die 'failed to exec "uniq -c"'},
-  group  => sub {exec 'sort'        or die 'failed to exec "sort"'},
-  rgroup => sub {exec 'sort', '-r'  or die 'failed to exec "sort -r"'},
-  order  => sub {exec 'sort', '-n'  or die 'failed to exec "sort -n"'},
-  rorder => sub {exec 'sort', '-rn' or die 'failed to exec "sort -rn"'},
+  count => sub {
+    open(my $fh, '| uniq -c') or die 'failed to exec "uniq -c"';
+    print $fh $_ while <>;
+    close $fh;
+  },
+
+  group => sub {
+    open(my $fh, '| sort') or die 'failed to exec "sort"';
+    print $fh $_ while <>;
+    close $fh;
+  },
+
+  rgroup => sub {
+    open(my $fh, '| sort -r') or die 'failed to exec "sort -r"';
+    print $fh $_ while <>;
+    close $fh;
+  },
+
+  order => sub {
+    open(my $fh, '| sort -n') or die 'failed to exec "sort -n"';
+    print $fh $_ while <>;
+    close $fh;
+  },
+
+  rorder => sub {
+    open(my $fh, '| sort -rn') or die 'failed to exec "sort -rn"';
+    print $fh $_ while <>;
+    close $fh;
+  },
 
   average => sub {
     my $size = $_[0];
@@ -101,8 +125,10 @@ my %functions = (
   },
 
   plot => sub {
-    exec "gnuplot -e \'plot \"-\" @_\' -persist"
+    open(my $fh, "| gnuplot -e \'plot \"-\" @_\' -persist")
       or die 'failed to exec "gnuplot -persist"';
+    print $fh $_ while <>;
+    close $fh;
   },
 
   poll => sub {
