@@ -267,4 +267,8 @@ for (my $i = 0; $i < @parsed; ++$i) {
       if defined $reader;
     $functions{$command}->(@args);
   }
+
+  # Prevent <> from reading files after the first iteration (this is such a
+  # hack).
+  @ARGV = ();
 }
