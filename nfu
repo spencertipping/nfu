@@ -51,36 +51,26 @@ my %arity = (
   quant    => 1,
 );
 
+sub exec_with_diamond {
+  if (@ARGV) {
+    # Arguments are specified in filenames and may be compressed, so use perl
+    # to forward data.
+    open(my $fh, '|' . join(' ', map {"'$_'"} @_)) or die "failed to exec @_";
+    print $fh $_ while <>;
+    close $fh;
+  } else {
+    # Faster option: just exec the program in-place. This avoids a layer of
+    # interprocess piping.
+    exec @_ or die "failed to exec @_";
+  }
+}
+
 my %functions = (
-  count => sub {
-    open(my $fh, '| uniq -c') or die 'failed to exec "uniq -c"';
-    print $fh $_ while <>;
-    close $fh;
-  },
-
-  group => sub {
-    open(my $fh, '| sort') or die 'failed to exec "sort"';
-    print $fh $_ while <>;
-    close $fh;
-  },
-
-  rgroup => sub {
-    open(my $fh, '| sort -r') or die 'failed to exec "sort -r"';
-    print $fh $_ while <>;
-    close $fh;
-  },
-
-  order => sub {
-    open(my $fh, '| sort -n') or die 'failed to exec "sort -n"';
-    print $fh $_ while <>;
-    close $fh;
-  },
-
-  rorder => sub {
-    open(my $fh, '| sort -rn') or die 'failed to exec "sort -rn"';
-    print $fh $_ while <>;
-    close $fh;
-  },
+  count  => sub {exec_with_diamond 'uniq -c'},
+  group  => sub {exec_with_diamond 'sort'},
+  rgroup => sub {exec_with_diamond 'sort -r'},
+  order  => sub {exec_with_diamond 'sort -n'},
+  rorder => sub {exec_with_diamond 'sort -rn'},
 
   average => sub {
     my $size = $_[0];
@@ -124,12 +114,7 @@ my %functions = (
     }
   },
 
-  plot => sub {
-    open(my $fh, "| gnuplot -e \'plot \"-\" @_\' -persist")
-      or die 'failed to exec "gnuplot -persist"';
-    print $fh $_ while <>;
-    close $fh;
-  },
+  plot => sub {exec_with_diamond 'gnuplot', '-e', "plot \"-\" @_", '-persist'},
 
   poll => sub {
     my ($sleep, $command) = @_;
@@ -229,46 +214,51 @@ while (@exploded) {
   }
 }
 
-# Note: the loop below uses pipe/fork/dup2 instead of a more idiomatic Open2
-# call. I don't have a good reason for this other than to figure out how the
-# low-level stuff worked.
-for (my $i = 0; $i < @parsed; ++$i) {
-  my ($command, @args) = @{$parsed[$i]};
+if (@parsed) {
+  # Note: the loop below uses pipe/fork/dup2 instead of a more idiomatic Open2
+  # call. I don't have a good reason for this other than to figure out how the
+  # low-level stuff worked.
+  for (my $i = 0; $i < @parsed; ++$i) {
+    my ($command, @args) = @{$parsed[$i]};
 
-  # Here's where things get fun. The question right now is, "do we need to
-  # fork, or can we run in-process?" -- i.e. are we in the middle, or at the
-  # end? When we're in the middle, we want to redirect STDOUT to the pipe's
-  # writer and fork; otherwise we run in-process and write directly to the
-  # existing STDOUT.
-  if ($i < @parsed - 1) {
-    # We're in the middle, so allocate a pipe and fork.
-    pipe my($new_reader), my($writer);
-    unless (fork) {
-      # We're the child, so do STDOUT redirection.
-      close $new_reader or die "failed to close pipe reader: $!";
+    # Here's where things get fun. The question right now is, "do we need to
+    # fork, or can we run in-process?" -- i.e. are we in the middle, or at the
+    # end? When we're in the middle, we want to redirect STDOUT to the pipe's
+    # writer and fork; otherwise we run in-process and write directly to the
+    # existing STDOUT.
+    if ($i < @parsed - 1) {
+      # We're in the middle, so allocate a pipe and fork.
+      pipe my($new_reader), my($writer);
+      unless (fork) {
+        # We're the child, so do STDOUT redirection.
+        close $new_reader or die "failed to close pipe reader: $!";
+        dup2(fileno($reader), 0) or die "failed to dup input: $!"
+          if defined $reader;
+        dup2(fileno($writer), 1) or die "failed to dup stdout: $!";
+
+        close $reader or die "failed to close reader: $!" if defined $reader;
+        close $writer or die "failed to close writer: $!";
+
+        # The function here may never return.
+        $functions{$command}->(@args);
+        exit;
+      } else {
+        close $writer or die "failed to close pipe writer: $!";
+        $reader = $new_reader;
+      }
+    } else {
+      # We've hit the end of the chain. Preserve stdout, redirect stdin from
+      # current reader.
       dup2(fileno($reader), 0) or die "failed to dup input: $!"
         if defined $reader;
-      dup2(fileno($writer), 1) or die "failed to dup stdout: $!";
-
-      close $reader or die "failed to close reader: $!" if defined $reader;
-      close $writer or die "failed to close writer: $!";
-
-      # The function here may never return.
       $functions{$command}->(@args);
-      exit;
-    } else {
-      close $writer or die "failed to close pipe writer: $!";
-      $reader = $new_reader;
     }
-  } else {
-    # We've hit the end of the chain. Preserve stdout, redirect stdin from
-    # current reader.
-    dup2(fileno($reader), 0) or die "failed to dup input: $!"
-      if defined $reader;
-    $functions{$command}->(@args);
-  }
 
-  # Prevent <> from reading files after the first iteration (this is such a
-  # hack).
-  @ARGV = ();
+    # Prevent <> from reading files after the first iteration (this is such a
+    # hack).
+    @ARGV = ();
+  }
+} else {
+  # Behave like cat, which is useful for auto-decompressing things.
+  print while <>;
 }

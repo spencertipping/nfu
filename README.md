@@ -58,14 +58,15 @@ $ seq 100 | nfu -lq1                    # almost; q rounds, not truncates
 
 ## Examples
 ```sh
+$ nfu -e length -f0Op 'with lines' nfu  # falloff plot of line lengths of nfu
 $ seq 100 | nfu -sp                     # running total of 1 .. 100
 $ seq 50 | nfu -e '%0 ** 2' -sp         # running total of 1^2, 2^2, ... 50^2
 $ seq 100 | nfu -sssp                   # third-integral of 1 .. 100
 $ egrep -o '\w' words | nfu -gcO        # descending letter frequency distribution
 $ seq 100 | shuf > data
-$ nfu -a5 < data                        # sliding average of up to 5 elements
-$ nfu -a < data                         # running average of all items so far
-$ nfu -S10,10dp < data                  # remove first/last 10, delta, plot
+$ nfu -a5 data                          # sliding average of up to 5 elements
+$ nfu -a data                           # running average of all items so far
+$ nfu -S10,10dp data                    # remove first/last 10, delta, plot
 $ seq 100 | nfu -lq0.01                 # list of logs, two decimal places
 ```
 
