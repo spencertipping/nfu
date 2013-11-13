@@ -67,7 +67,9 @@ sub exec_with_diamond {
 
 sub sort_options {
   '-S', $ENV{NFU_SORT_BUFFER} || '256M',
-  '--parallel=' . ($ENV{NFU_SORT_PARALLEL} || 4);
+  '--parallel=' . ($ENV{NFU_SORT_PARALLEL} || 4),
+  ($ENV{NFU_SORT_COMPRESS} ? ("--compress-program=$ENV{NFU_SORT_COMPRESS}")
+                           : ())
 }
 
 my %functions = (

@@ -76,6 +76,7 @@ Listed here with default values.
 ```sh
 NFU_SORT_BUFFER=256M                    # in-memory sort buffer size
 NFU_SORT_PARALLEL=4                     # max parallel mergesorts
+NFU_SORT_COMPRESS=                      # program to compress disk temps
 ```
 
 ## Commands
