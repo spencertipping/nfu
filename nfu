@@ -208,7 +208,8 @@ while (@exploded) {
     # through the appropriate decompressor first.
     push @ARGV, $command =~ s/^(.*\.gz)/zcat $1 |/ri
                          =~ s/^(.*\.bz2)/bzcat $1 |/ri
-                         =~ s/^(.*\.xz)/xz -dc $1 |/ri;
+                         =~ s/^(.*\.xz)/xz -dc $1 |/ri
+                         =~ s/^(.*\.lzo)/lzop -dc $1 |/ri;
   } else {
     die "nonexistent command/file: $command";
   }
