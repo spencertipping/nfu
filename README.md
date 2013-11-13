@@ -70,6 +70,14 @@ $ nfu -S10,10dp data                    # remove first/last 10, delta, plot
 $ seq 100 | nfu -lq0.01                 # list of logs, two decimal places
 ```
 
+## Environment variables
+Listed here with default values.
+
+```sh
+NFU_SORT_BUFFER=256M                    # in-memory sort buffer size
+NFU_SORT_PARALLEL=4                     # max parallel mergesorts
+```
+
 ## Commands
 `nfu` chains commands together just like a shell pipeline. This means that
 order matters; `nfu -sc` and `nfu -cs` do two completely different things.

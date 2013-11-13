@@ -65,12 +65,17 @@ sub exec_with_diamond {
   }
 }
 
+sub sort_options {
+  '-S', $ENV{NFU_SORT_BUFFER} || '256M',
+  '--parallel=' . ($ENV{NFU_SORT_PARALLEL} || 4);
+}
+
 my %functions = (
-  count  => sub {exec_with_diamond 'uniq -c'},
-  group  => sub {exec_with_diamond 'sort'},
-  rgroup => sub {exec_with_diamond 'sort -r'},
-  order  => sub {exec_with_diamond 'sort -n'},
-  rorder => sub {exec_with_diamond 'sort -rn'},
+  count  => sub {exec_with_diamond 'uniq', '-c'},
+  group  => sub {exec_with_diamond 'sort', sort_options},
+  rgroup => sub {exec_with_diamond 'sort', '-r', sort_options},
+  order  => sub {exec_with_diamond 'sort', '-n', sort_options},
+  rorder => sub {exec_with_diamond 'sort', '-rn', sort_options},
 
   average => sub {
     my $size = $_[0];
