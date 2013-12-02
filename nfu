@@ -196,6 +196,8 @@ my %functions = (
     require JSON or die 'nfu: unable to load JSON module';
     JSON->import;
 
+    no warnings qw(uninitialized);
+
     my $body = $_[0] =~ s/%(\d+)/\$_[$1]/gr
                      =~ s/\.(\w+)/->{'$1'}/gr;
 
