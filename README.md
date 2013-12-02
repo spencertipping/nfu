@@ -93,7 +93,9 @@ order matters; `nfu -sc` and `nfu -cs` do two completely different things.
 - `-e`, `--eval`: Allows you to transform data with a Perl expression.
   Individual fields are available in `@_`. If you return a single value, then
   it replaces the first column; otherwise your data replaces all values in the
-  row. If you return an empty list, no output row is generated.
+  row. If you return an empty list, no output row is generated. You can store
+  state across invocations by writing to `$_`, which is initially the empty
+  string.
 - `-E`, `--every`: Prints every nth line; this gives you a way to sample large
   datasets.
 - `-f`, `--fields`: Allows you to reorder fields arbitrarily, outputting
@@ -102,6 +104,11 @@ order matters; `nfu -sc` and `nfu -cs` do two completely different things.
 - `-g`, `--group`: Pipes data through `sort` to create groups of equivalent
   entries. Assumes lexicographic, not numeric, sort.
 - `-G`, `--rgroup`: Same as `group`, but reverses the sort order.
+- `-j`, `--json`: Same as `eval`, but the first field is automatically parsed
+  as JSON and the result stored in `$_`. Also, any `.(\w+)` in the expression
+  are converted to `->{'$1'}`, so you can write `$_.foo` instead of
+  `$_->{'foo'}`, for instance. Returning multiple values causes them to be
+  written as plain text, not re-encoded.
 - `-l`, `--log`: Log-transforms every value.
 - `-L`, `--exp`: Exponent-transforms every value.
 - `-o`, `--order`: Orders elements by numeric value.
@@ -113,6 +120,9 @@ order matters; `nfu -sc` and `nfu -cs` do two completely different things.
   generate a stream of data.
 - `-q`, `--quant`: Quantize each number to the nearest x, which defaults to 1.
   x can be any positive value.
+- `-r`, `--reduce`: Identical to `eval`, but takes a first argument specifying
+  the initial value for `$_`. For example, `nfu -r 0 '$_ += %0'` is the same as
+  `nfu -s`.
 - `-s`, `--sum`: Takes a running total of the given numbers.
 - `-S`, `--slice`: Takes two numbers: #lines to chop from head, #lines to chop
   from tail.
