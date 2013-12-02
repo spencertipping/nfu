@@ -11,12 +11,12 @@ $|++;
 
 my %explosions = (
   a => '--average',
-  v => '--variance',
   c => '--count',
   d => '--delta',
   e => '--eval',
   E => '--every',
   f => '--fields',
+  F => '--fieldsplit',
   g => '--group',
   G => '--rgroup',
   j => '--json',
@@ -33,26 +33,26 @@ my %explosions = (
 );
 
 my %arity = (
-  average  => 1,
-  variance => 1,
-  count    => 0,
-  delta    => 0,
-  eval     => 1,
-  every    => 1,
-  fields   => 1,
-  group    => 0,
-  rgroup   => 0,
-  json     => 1,
-  log      => 0,
-  exp      => 0,
-  order    => 0,
-  rorder   => 0,
-  plot     => 1,
-  poll     => 2,
-  sum      => 0,
-  slice    => 2,
-  quant    => 1,
-  reduce   => 2,
+  average    => 1,
+  count      => 0,
+  delta      => 0,
+  eval       => 1,
+  every      => 1,
+  fields     => 1,
+  fieldsplit => 1,
+  group      => 0,
+  rgroup     => 0,
+  json       => 1,
+  log        => 0,
+  exp        => 0,
+  order      => 0,
+  rorder     => 0,
+  plot       => 1,
+  poll       => 2,
+  sum        => 0,
+  slice      => 2,
+  quant      => 1,
+  reduce     => 2,
 );
 
 sub exec_with_diamond {
@@ -171,7 +171,7 @@ my %functions = (
     local $_ = '';
     while (my $line = <>) {
       chomp $line;
-      my @xs = split /\s+/, $line;
+      my @xs = split /\t/, $line;
       my @ys = $f->(@xs);
       print @ys > 1 ? join("\t", @ys)
                     : join("\t", $ys[0], @xs[1 .. $#xs]), "\n" if @ys;
@@ -185,7 +185,7 @@ my %functions = (
     local $_ = $_[0];
     while (my $line = <>) {
       chomp $line;
-      my @xs = split /\s+/, $line;
+      my @xs = split /\t/, $line;
       my @ys = $f->(@xs);
       print @ys > 1 ? join("\t", @ys)
                     : join("\t", $ys[0], @xs[1 .. $#xs]), "\n" if @ys;
@@ -229,6 +229,11 @@ my %functions = (
   fields => sub {
     my @fs = split //, $_[0];
     chomp, print join("\t", (split)[@fs]), "\n" while <>;
+  },
+
+  fieldsplit => sub {
+    my $delim = qr/$_[0]/;
+    chomp, print join("\t", split /$delim/), "\n" while <>;
   },
 );
 
