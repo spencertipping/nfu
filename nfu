@@ -77,11 +77,27 @@ sub sort_options {
 }
 
 my %functions = (
-  count  => sub {exec_with_diamond 'uniq', '-c'},
   group  => sub {exec_with_diamond 'sort', sort_options},
   rgroup => sub {exec_with_diamond 'sort', '-r', sort_options},
   order  => sub {exec_with_diamond 'sort', '-n', sort_options},
   rorder => sub {exec_with_diamond 'sort', '-rn', sort_options},
+
+  count  => sub {
+    # Same behavior as uniq -c, but delimits counts with \t
+    chomp(my $last = <>);
+    my $count = 1;
+    while (<>) {
+      chomp;
+      if ($_ eq $last) {
+        ++$count;
+      } else {
+        print "$count\t$last\n";
+        $count = 1;
+        $last  = $_;
+      }
+    }
+    print "$count\t$last\n";
+  },
 
   average => sub {
     my $size = $_[0];
@@ -89,7 +105,7 @@ my %functions = (
     my @window = ();
     while (<>) {
       chomp;
-      my ($x, @xs) = split;
+      my ($x, @xs) = split /\t/;
       print join("\t", ($total += $x) /
                        (++$n > $size && $size ? $size : $n), @xs), "\n";
       $total -= shift @window if $size and push(@window, $x) >= $size;
@@ -112,7 +128,7 @@ my %functions = (
   log => sub {
     while (<>) {
       chomp;
-      my ($x, @xs) = split;
+      my ($x, @xs) = split /\t/;
       print join("\t", log($x), @xs), "\n";
     }
   },
@@ -120,7 +136,7 @@ my %functions = (
   exp => sub {
     while (<>) {
       chomp;
-      my ($x, @xs) = split;
+      my ($x, @xs) = split /\t/;
       print join("\t", exp($x), @xs), "\n";
     }
   },
@@ -138,7 +154,7 @@ my %functions = (
     my $last = 0;
     while (<>) {
       chomp;
-      my ($x, @xs) = split;
+      my ($x, @xs) = split /\t/;
       print join("\t", $x - $last, @xs), "\n";
       $last = $x;
     }
@@ -148,7 +164,7 @@ my %functions = (
     my $total = 0;
     while (<>) {
       chomp;
-      my ($x, @xs) = split;
+      my ($x, @xs) = split /\t/;
       print join("\t", $total += $x, @xs), "\n";
     }
   },
@@ -157,7 +173,7 @@ my %functions = (
     my $quantum = $_[0] || 1.0;
     while (<>) {
       chomp;
-      my ($x, @xs) = split;
+      my ($x, @xs) = split /\t/;
       my $sign = $x < 0 ? -1 : 1;
       print join("\t", int(abs($x) / $quantum + 0.5) * $quantum * $sign, @xs),
             "\n";
@@ -230,7 +246,7 @@ my %functions = (
 
   fields => sub {
     my @fs = split //, $_[0];
-    chomp, print join("\t", (split)[@fs]), "\n" while <>;
+    chomp, print join("\t", (split /\t/)[@fs]), "\n" while <>;
   },
 
   fieldsplit => sub {
