@@ -25,6 +25,11 @@ $ egrep -o '\w+' file | nfu -gcOsf0p 'with lines'
 
 Most `nfu` commands operate on the first column, leaving the others untouched.
 
+## Assumptions
+- Columns are always tab-delimited, and may be empty. You can use the `-F`
+  (`--fieldsplit`) command if you're starting with data that isn't
+  tab-separated.
+
 ## Syntax
 ```sh
 $ nfu [options...] [files...]
@@ -68,6 +73,7 @@ $ nfu -a5 data                          # sliding average of up to 5 elements
 $ nfu -a data                           # running average of all items so far
 $ nfu -S10,10dp data                    # remove first/last 10, delta, plot
 $ seq 100 | nfu -lq0.01                 # list of logs, two decimal places
+$ nfu -F:f6gcO /etc/passwd              # login shells by frequency
 ```
 
 ## Environment variables
@@ -85,9 +91,9 @@ order matters; `nfu -sc` and `nfu -cs` do two completely different things.
 
 - `-a`, `--average`: Generates a running average of the last N elements. If N =
   0 or is not provided, then generates a running average of all numbers.
-- `-c`, `--count`: Pipes data through `uniq -c` to count adjacent, equivalent
-  items. You should probably use `-g` before this unless your data is already
-  grouped or you just want run lengths.
+- `-c`, `--count`: Counts adjacent, equivalent items. You should probably use
+  `-g` before this unless your data is already grouped or you just want run
+  lengths.
 - `-d`, `--delta`: The inverse of `sum`; returns the difference between
   successive numbers.
 - `-e`, `--eval`: Allows you to transform data with a Perl expression.
@@ -101,6 +107,8 @@ order matters; `nfu -sc` and `nfu -cs` do two completely different things.
 - `-f`, `--fields`: Allows you to reorder fields arbitrarily, outputting
   tab-delimited data. Takes a single string of digits, each of which is a
   zero-based field index.
+- `-F`, `--fieldsplit`: Splits each line of the input on the given Perl regexp,
+  which allows you to take in CSV or whitespace-separated data.
 - `-g`, `--group`: Pipes data through `sort` to create groups of equivalent
   entries. Assumes lexicographic, not numeric, sort.
 - `-G`, `--rgroup`: Same as `group`, but reverses the sort order.
@@ -108,7 +116,8 @@ order matters; `nfu -sc` and `nfu -cs` do two completely different things.
   as JSON and the result stored in `$_`. Also, any `.(\w+)` in the expression
   are converted to `->{'$1'}`, so you can write `$_.foo` instead of
   `$_->{'foo'}`, for instance. Returning multiple values causes them to be
-  written as plain text, not re-encoded.
+  written as plain text, not re-encoded. Returning zero values with `()` causes
+  no output row to be generated.
 - `-l`, `--log`: Log-transforms every value.
 - `-L`, `--exp`: Exponent-transforms every value.
 - `-o`, `--order`: Orders elements by numeric value.
