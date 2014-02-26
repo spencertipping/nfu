@@ -2,7 +2,7 @@
 # nfu: Command-line numeric fu | Spencer Tipping
 # Licensed under the terms of the MIT source code license
 
-use v5.10;
+use v5.14;
 use strict;
 use warnings;
 use POSIX qw(dup2);
@@ -82,178 +82,249 @@ my %functions = (
   order  => sub {exec_with_diamond 'sort', '-n', sort_options},
   rorder => sub {exec_with_diamond 'sort', '-rn', sort_options},
 
-  count  => sub {
-    # Same behavior as uniq -c, but delimits counts with \t
-    chomp(my $last = <>);
-    my $count = 1;
-    while (<>) {
-      chomp;
-      if ($_ eq $last) {
+  count  => [
+    [qw/count last/],
+    q{# Same behavior as uniq -c, but delimits counts with \t
+      chomp(my $last = <>);
+      my $count = 1},
+
+    q{if (LINE eq $last) {
         ++$count;
       } else {
-        print "$count\t$last\n";
+        EMIT($count, $last);
         $count = 1;
-        $last  = $_;
-      }
-    }
-    print "$count\t$last\n";
-  },
+        $last  = LINE;
+      }},
 
-  average => sub {
-    my $size = $_[0];
-    my ($n, $total) = (0, 0);
-    my @window = ();
-    while (<>) {
-      chomp;
-      my ($x, @xs) = split /\t/;
-      print join("\t", ($total += $x) /
-                       (++$n > $size && $size ? $size : $n), @xs), "\n";
-      $total -= shift @window if $size and push(@window, $x) >= $size;
-    }
-  },
+    q{EMIT($count, $last)}],
 
-  slice => sub {
-    my ($chop_head, $chop_tail) = @_;
-    die "usage: --slice head tail, or -Shead,tail"
-      unless defined $chop_head and defined $chop_tail
-         and $chop_head =~ /^\d+$/ and $chop_tail =~ /^\d+$/;
-    my @window;
-    my $n = 0;
-    while (<>) {
-      push @window, $_ if ++$n > $chop_head;
-      print shift @window if @window > $chop_tail;
-    }
-  },
+  average => [
+    [qw/size n total window x xs/],
+    q{my $size = $_[0];
+      my ($n, $total) = (0, 0);
+      my @window = ();},
 
-  log => sub {
-    while (<>) {
-      chomp;
-      my ($x, @xs) = split /\t/;
-      print join("\t", log($x), @xs), "\n";
-    }
-  },
+    q{my ($x, @xs) = SPLIT;
+      EMIT(($total += $x) /
+           (++$n > $size && $size ? $size : $n), @xs);
+      $total -= shift @window if $size and push(@window, $x) >= $size}],
 
-  exp => sub {
-    while (<>) {
-      chomp;
-      my ($x, @xs) = split /\t/;
-      print join("\t", exp($x), @xs), "\n";
-    }
-  },
+  slice => [
+    [qw/chop_head chop_tail window n/],
+    q{my ($chop_head, $chop_tail) = @_;
+      die "usage: --slice head tail, or -Shead,tail"
+        unless defined $chop_head and defined $chop_tail
+           and $chop_head =~ /^\d+$/ and $chop_tail =~ /^\d+$/;
+      my @window;
+      my $n = 0},
+    q{push @window, LINE if ++$n > $chop_head;
+      EMITLINE(shift @window) if @window > $chop_tail}],
+
+  log => [
+    [qw/x xs/],
+    q{},
+    q{my ($x, @xs) = SPLIT;
+      EMIT(log($x), @xs)}],
+
+  exp => [
+    [qw/x xs/],
+    q{},
+    q{my ($x, @xs) = SPLIT;
+      EMIT(exp($x), @xs)}],
 
   plot => sub {exec_with_diamond 'gnuplot', '-e', "plot \"-\" @_", '-persist'},
 
-  poll => sub {
-    my ($sleep, $command) = @_;
-    die "usage: --poll sleep-amount 'command ...'"
-      unless defined $sleep and defined $command;
-    system($command), sleep $sleep while 1;
-  },
+  poll => [
+    [qw/sleep command/],
+    q{my ($sleep, $command) = @_;
+      die "usage: --poll sleep-amount 'command ...'"
+        unless defined $sleep and defined $command},
+    q{EMITLINE(qx|$command|), sleep $sleep while 1}],
 
-  delta => sub {
-    my $last = 0;
-    while (<>) {
-      chomp;
-      my ($x, @xs) = split /\t/;
-      print join("\t", $x - $last, @xs), "\n";
-      $last = $x;
-    }
-  },
+  delta => [
+    [qw/last x xs/],
+    q{my $last = 0},
+    q{my ($x, @xs) = SPLIT;
+      EMIT($x - $last, @xs);
+      $last = $x}],
 
-  sum => sub {
-    my $total = 0;
-    while (<>) {
-      chomp;
-      my ($x, @xs) = split /\t/;
-      print join("\t", $total += $x, @xs), "\n";
-    }
-  },
+  sum => [
+    [qw/total x xs/],
+    q{my $total = 0},
+    q{my ($x, @xs) = SPLIT;
+      EMIT($total += $x, @xs)}],
 
-  quant => sub {
-    my $quantum = $_[0] || 1.0;
-    while (<>) {
-      chomp;
-      my ($x, @xs) = split /\t/;
+  quant => [
+    [qw/quantum x xs sign/],
+    q{my $quantum = $_[0] || 1.0},
+    q{my ($x, @xs) = SPLIT;
       my $sign = $x < 0 ? -1 : 1;
-      print join("\t", int(abs($x) / $quantum + 0.5) * $quantum * $sign, @xs),
-            "\n";
-    }
-  },
+      EMIT(int(abs($x) / $quantum + 0.5) * $quantum * $sign, @xs)}],
 
-  eval => sub {
-    (my $code = $_[0]) =~ s/%(\d+)/\$_[$1]/g;
-    my $f = eval "sub {\n" . $code . "\n}" or
-            die "failed to compile eval function: $@\n  (code was $code)";
-    local $_ = '';
-    while (my $line = <>) {
-      chomp $line;
-      my @xs = split /\t/, $line;
+  eval => [
+    [qw/code f xs ys/],
+    q{(my $code = $_[0]) =~ s/%(\d+)/\$_[$1]/g;
+      my $f = eval "sub {\n" . $code . "\n}" or
+              die "failed to compile eval function: $@\n  (code was $code)";
+      local $_ = ''},
+    q{my @xs = SPLIT;
       my @ys = $f->(@xs);
-      print @ys > 1 ? join("\t", @ys)
-                    : join("\t", $ys[0], @xs[1 .. $#xs]), "\n" if @ys;
-    }
-  },
+      EMIT(@ys > 1 ? @ys
+                     ($ys[0], @xs[1 .. $#xs])) if @ys}],
 
-  reduce => sub {
-    (my $code = $_[1]) =~ s/%(\d+)/\$_[$1]/g;
-    my $f = eval "sub {\n" . $code . "\n}" or
-            die "failed to compile eval function: $@\n  (code was $code)";
-    local $_ = $_[0];
-    while (my $line = <>) {
-      chomp $line;
-      my @xs = split /\t/, $line;
+  reduce => [
+    [qw/code f xs ys/],
+    q{(my $code = $_[1]) =~ s/%(\d+)/\$_[$1]/g;
+      my $f = eval "sub {\n" . $code . "\n}" or
+              die "failed to compile eval function: $@\n  (code was $code)";
+      local $_ = $_[0]},
+    q{my @xs = SPLIT;
       my @ys = $f->(@xs);
-      print @ys > 1 ? join("\t", @ys)
-                    : join("\t", $ys[0], @xs[1 .. $#xs]), "\n" if @ys;
-    }
-  },
+      EMIT(@ys > 1 ? @ys
+                     ($ys[0], @xs[1 .. $#xs])) if @ys}],
 
-  json => sub {
-    require JSON or die 'nfu: unable to load JSON module';
-    JSON->import;
+  json => [
+    [qw/body json code f xs ys/],
+    q{require JSON or die 'nfu: unable to load JSON module';
+      JSON->import;
 
-    no warnings qw(uninitialized);
+      no warnings qw(uninitialized);
 
-    my $body = $_[0] =~ s/%(\d+)/\$_[$1]/gr
-                     =~ s/\.(\w+)/->{'$1'}/gr;
+      my $body = $_[0] =~ s/%(\d+)/\$_[$1]/gr
+                       =~ s/\.(\w+)/->{'$1'}/gr;
 
-    my $json = JSON->new->allow_nonref->utf8(1);
-    my $code = qq{sub {
-      local \$_ = \$json->decode(\$_[0]);
-      $body;
-    }};
+      my $json = JSON->new->allow_nonref->utf8(1);
+      my $code = qq{sub {
+        local \$_ = \$json->decode(\$_[0]);
+        $body;
+      }};
 
-    my $f = eval $code
-            or die "failed to compile eval function: $@\n  (code was $code)";
+      my $f = eval $code
+              or die "failed to compile eval function: $@\n  (code was $code)"},
 
-    while (<>) {
-      chomp;
-      my @xs = split /\t/;
+    q{my @xs = SPLIT;
       my @ys = $f->(@xs);
-      print @ys > 1 ? join("\t", @ys)
-                    : join("\t", $json->encode($ys[0]), @xs[1 .. $#xs]), "\n"
-      if @ys;
-    }
-  },
+      EMIT(@ys > 1 ? @ys
+                   : ($json->encode($ys[0]), @xs[1 .. $#xs]))
+      if @ys}],
 
-  every => sub {
-    my ($n) = @_;
-    my $i = 0;
-    while (<>) {
-      print unless $i++ % $n;
-    }
-  },
+  every => [
+    [qw/n i/],
+    q{my ($n) = @_;
+      my $i = 0},
+    q{EMIT(SPLIT) unless $i++ % $n}],
 
-  fields => sub {
-    my @fs = split //, $_[0];
-    chomp, print join("\t", (split /\t/)[@fs]), "\n" while <>;
-  },
+  fields => [
+    [qw/fs/],
+    q{my @fs = split //, $_[0]},
+    q{EMIT((SPLIT)[@fs])}],
 
-  fieldsplit => sub {
-    my $delim = qr/$_[0]/;
-    chomp, print join("\t", split /$delim/), "\n" while <>;
-  },
+  fieldsplit => [
+    [qw/delim/],
+    q{my $delim = qr/$_[0]/},
+    q{EMIT(split /$delim/, LINE)}],
 );
+
+our $gensym_id = 0;
+sub replace_locals {
+  my ($f, @locals) = @_;
+  $f =~ s/\b($_)\b/__$gensym_id$1__/g for @locals;
+  $f;
+}
+
+sub line {print @_, "\n"}
+sub enqueue(\@@) {push $_[0], [@_[1..$#_]]}
+
+sub compile_one {
+  # Takes a single command and some compiler directives, and returns an array
+  # of (init, body, final).
+  my ($is_first, $is_last, $command, @args) = @_;
+  s/([\\'])/\\$1/g for @args;
+
+  ++$gensym_id;
+
+  my $quoted_args  = join ', ', map "'$_'", @args;
+  my $init_form    = "\@_ = ($quoted_args);\n"
+                   . replace_locals($command->[1] // '', @{$command->[0]})
+                   . "\n;";
+
+  my $emitter      = $is_last ? 'line join "\t", '
+                              : 'enqueue @_line_queue, ';
+  my $line_emitter = $is_last ? 'line '
+                              : 'enqueue @_line_queue, split /\\t/, ';
+
+  my $line         = $is_first ? '$_line' : 'join("\\t", @_split)';
+  my $split        = '@_split';
+
+  my $body_form    = replace_locals($command->[2] // '', @{$command->[0]});
+  $body_form =~ s/\bEMIT\b/$emitter/g;
+  $body_form =~ s|\bEMIT_LINE\b|$emitter split /\\t/, |g;
+  $body_form =~ s/\bLINE\b/$line/g;
+  $body_form =~ s/\bSPLIT\b/$split/g;
+
+  my $final_form   = replace_locals($command->[3] // '', @{$command->[0]});
+  $final_form =~ s/\bEMIT\b/$emitter/g;
+  $final_form =~ s|\bEMIT_LINE\b|$emitter split /\\t/, |g;
+  $final_form =~ s/\bLINE\b/$line/g;
+  $final_form =~ s/\bSPLIT\b/$split/g;
+
+  ($init_form, $body_form, $final_form);
+}
+
+sub compile {
+  # Takes one or more fused commands and compiles a new Perl function to
+  # execute them. Fused commands should be in the form [command_name, [@args]].
+  my @commands    = @_;
+  my @init_stuff  = ();
+  my @body_stuff  = ();
+  my @final_stuff = ();
+
+  for (my $i = 0; $i < @commands; ++$i) {
+    my ($init, $body, $final) = compile_one $i == 0,
+                                            $i == $#commands,
+                                            $commands[$i][0],
+                                            @{$commands[$i][1]};
+
+    push @init_stuff,  $init  if length $init;
+    push @body_stuff,  $body  if length $body;
+    push @final_stuff, $final if length $final;
+  }
+
+  my $compiled_init = join "\n", @init_stuff;
+  my $compiled_body =
+    join "\n",
+    map '@_lines = @_line_queue;'
+      . '@_line_queue = ();'
+      . 'for my $_line (@_lines) {@_split = @$_line;'
+      . "$_\n;\n}", @body_stuff;
+
+  my $compiled_final =
+    join "\n",
+    map '@_lines = @_line_queue;'
+      . '@_line_queue = ();'
+      . 'for my $_line (@_lines) {@_split = @$_line;'
+      . "$_\n;\n}", @final_stuff;
+
+  my $code = qq{sub {
+    $compiled_init
+    my \@_lines;
+    my \@_line_queue;
+    my \$_line;
+    my \@_split;
+    while (defined(\$_line = <>)) {
+      \@_split = split /\\t/, \$_line;
+      \@_line_queue = [\@_split];
+      $compiled_body
+    }
+    $compiled_final
+  }};
+
+  print STDERR "compiling $code";
+
+  my $subref = eval $code;
+  die "compilation error: $@ (compiling $code)" if $@;
+  $subref;
+}
 
 sub explode {
   return $_ unless s/^-([^-])/$1/;
@@ -265,6 +336,7 @@ $SIG{CHLD} = 'IGNORE';
 my $reader   = undef;
 my @exploded = map explode, @ARGV;
 my @parsed   = ();
+my $type     = 'CODE';
 
 @ARGV = ();
 
@@ -277,7 +349,7 @@ while (@exploded) {
 
   if (defined(my $arity = $arity{$command})) {
     my @args = splice @exploded, 0, $arity;
-    push @parsed, [$command, @args];
+    push @parsed, [$command, [@args]];
   } elsif (-f $command) {
     # It's really a filename, so push it onto @ARGV. If it's compressed, run it
     # through the appropriate decompressor first.
@@ -289,6 +361,12 @@ while (@exploded) {
     die "nonexistent command/file: $command";
   }
 }
+
+$$_[0] = $functions{$$_[0]} for @parsed;
+
+my $subref = compile @parsed;
+&$subref();
+exit;
 
 if (@parsed) {
   # Note: the loop below uses pipe/fork/dup2 instead of a more idiomatic Open2
