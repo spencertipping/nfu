@@ -260,18 +260,34 @@ sub explode {
   map {$explosions{$_} // $_} grep length, split /([.\d]*),?/;
 }
 
-$SIG{CHLD} = 'IGNORE';
+my $reader    = undef;
+my $verbose   = shift @ARGV if $ARGV[0] eq '-v' || $ARGV[0] eq '--verbose';
+my @exploded  = map explode, @ARGV;
+my @parsed    = ();
 
-my $reader   = undef;
-my @exploded = map explode, @ARGV;
-my @parsed   = ();
+my $pv_prefix = 'cat';
+if ($verbose) {
+  # Look for any number of pipe metering tools the user might have installed.
+  my $have_pv        = !system 'which pv        > /dev/null';
+  my $have_pipemeter = !system 'which pipemeter > /dev/null';
+  my $have_cpipe     = !system 'which cpipe     > /dev/null';
+
+  $pv_prefix = $have_pv        ? 'pv'
+             : $have_pipemeter ? 'pipemeter'
+             : $have_cpipe     ? 'cpipe -vt <' : 'cat';
+
+  if ($pv_prefix eq 'cat') {
+    print STDERR "nfu: requested verbose operation, but none of pv,\n";
+    print STDERR "pipemeter, or cpipe is installed\n";
+  }
+}
 
 @ARGV = ();
 
 # First parse through all of the options, pull out stray files, and replace
 # @ARGV. This enables <> in the worker subs. (The "right way" to do this would
-# be to chain the commands' inputs; then I could remove the branch in the while
-# loop below. But I'm too lazy.)
+# be to chain the commands' inputs; then I could remove the branch in the
+# for-loop below. But I'm too lazy.)
 while (@exploded) {
   (my $command = shift @exploded) =~ s/^--//;
 
@@ -281,10 +297,11 @@ while (@exploded) {
   } elsif (-f $command) {
     # It's really a filename, so push it onto @ARGV. If it's compressed, run it
     # through the appropriate decompressor first.
-    push @ARGV, $command =~ s/^(.*\.gz)/zcat $1 |/ri
-                         =~ s/^(.*\.bz2)/bzcat $1 |/ri
-                         =~ s/^(.*\.xz)/xz -dc $1 |/ri
-                         =~ s/^(.*\.lzo)/lzop -dc $1 |/ri;
+    push @ARGV, "$pv_prefix " . ($command =~ s/^(.*\.gz)/$1 | gzip -d/ri
+                                          =~ s/^(.*\.bz2)/$1 | bzip -d/ri
+                                          =~ s/^(.*\.xz)/$1 | xz -d/ri
+                                          =~ s/^(.*\.lzo)/$1 | lzop -d/ri)
+                              . ' |';
   } else {
     die "nonexistent command/file: $command";
   }

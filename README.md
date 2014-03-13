@@ -32,11 +32,14 @@ Most `nfu` commands operate on the first column, leaving the others untouched.
 
 ## Syntax
 ```sh
-$ nfu [options...] [files...]
+$ nfu [-v|--verbose] [options...] [files...]
 ```
 
 `nfu` will automatically uncompress any files ending in `.xz`, `.bz2`, or
-`.gz`, and will behave like `cat` if you give it multiple files.
+`.gz`, and will behave like `cat` if you give it multiple files. If you use
+`-v`, each file's data transfer rate will be measured using `pv`, `pipemeter`,
+or `cpipe` (whichever is on your system, failing over to `cat` if none). Note
+that `-v` must be the first option if specified.
 
 `nfu` accepts both long-form and short-form options, and there are a couple of
 different ways to write numbers. This is especially relevant if you're using
