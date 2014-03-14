@@ -310,7 +310,7 @@ my %functions = (
 
   fields => sub {
     my @fs = split //, $_[0];
-    chomp, print join("\t", (split /\t/)[@fs]), "\n" while <>;
+    chomp, print join("\t", map $_ // '', (split /\t/)[@fs]), "\n" while <>;
   },
 
   fieldsplit => sub {
