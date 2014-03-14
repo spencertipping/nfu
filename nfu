@@ -9,6 +9,8 @@ use POSIX qw(dup2);
 
 $|++;
 
+binmode STDOUT, ':utf8';
+
 my %explosions = (
   a => '--average',
   A => '--aggregate',
