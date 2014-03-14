@@ -21,6 +21,7 @@ my %explosions = (
   g => '--group',
   G => '--rgroup',
   j => '--json',
+  J => '--jsonflat',
   l => '--log',
   L => '--exp',
   o => '--order',
@@ -45,6 +46,7 @@ my %arity = (
   group      => 0,
   rgroup     => 0,
   json       => 1,
+  jsonflat   => 1,
   log        => 0,
   exp        => 0,
   order      => 0,
@@ -268,6 +270,33 @@ my %functions = (
       print @ys > 1 ? join("\t", @ys)
                     : join("\t", $json->encode($ys[0]), @xs[1 .. $#xs]), "\n"
       if @ys;
+    }
+  },
+
+  jsonflat => sub {
+    require JSON or die 'nfu: unable to load JSON module';
+    JSON->import;
+
+    no warnings qw(uninitialized);
+
+    my $body = $_[0] =~ s/%(\d+)/\$_[$1]/gr
+                     =~ s/\.(\w+)/->{'$1'}/gr;
+
+    my $json = JSON->new->allow_nonref->utf8(1);
+    my $code = qq{sub {
+      local \$_ = \$json->decode(\$_[0]);
+      $body;
+    }};
+
+    my $f = eval $code
+            or die "failed to compile eval function: $@\n  (code was $code)";
+
+    while (<>) {
+      chomp;
+      my @xs = split /\t/;
+      my @ys = $f->(@xs);
+      print @ys > 1 ? join("\t", @ys)
+                    : join("\t", $ys[0], @xs[1 .. $#xs]), "\n" if @ys;
     }
   },
 
