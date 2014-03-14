@@ -94,6 +94,12 @@ order matters; `nfu -sc` and `nfu -cs` do two completely different things.
 
 - `-a`, `--average`: Generates a running average of the last N elements. If N =
   0 or is not provided, then generates a running average of all numbers.
+- `-A`, `--aggregate`: Allows you to transform groups of rows with a Perl
+  expression. Adjacent rows are grouped by their first field value, and your
+  expression is invoked with `@_` containing a series of column arrays of
+  values (in references). `$_` and `$_[0][0]` both refer to the join key. Note
+  that unlike `eval`, any array returned from an aggregation function will
+  produce multiple output rows, not columns.
 - `-c`, `--count`: Counts adjacent, equivalent items. You should probably use
   `-g` before this unless your data is already grouped or you just want run
   lengths.

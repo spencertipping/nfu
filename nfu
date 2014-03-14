@@ -11,6 +11,7 @@ $|++;
 
 my %explosions = (
   a => '--average',
+  A => '--aggregate',
   c => '--count',
   d => '--delta',
   e => '--eval',
@@ -34,6 +35,7 @@ my %explosions = (
 
 my %arity = (
   average    => 1,
+  aggregate  => 1,
   count      => 0,
   delta      => 0,
   eval       => 1,
@@ -109,6 +111,39 @@ my %functions = (
       print join("\t", ($total += $x) /
                        (++$n > $size && $size ? $size : $n), @xs), "\n";
       $total -= shift @window if $size and push(@window, $x) >= $size;
+    }
+  },
+
+  aggregate => sub {
+    (my $code = $_[0]) =~ s/%(\d+)/\$_[$1]/g;
+    my $f = eval "sub {\n" . $code . "\n}" or
+            die "failed to compile aggregate function: $@\n  (code was $code)";
+    my @columns;
+    while (my $line = <>) {
+      chomp $line;
+      my @fields = split /\t/, $line;
+
+      # Two cases here. If the new record is compatible with the most recent
+      # existing one, or there aren't any existing ones, then group it and
+      # don't call the aggregator yet.
+      #
+      # If we see a change, then call the aggregator and empty out the group.
+      #
+      # Note that the aggregator function is called on columns, not rows.
+
+      my $n = @columns && @{$columns[0]};
+      if (!$n or $fields[0] eq ${$columns[0]}[0]) {
+        $columns[$_][$n] = $fields[$_] for 0 .. $#fields;
+      } else {
+        $_ = ${$columns[0]}[0];
+        print $_, "\n" for $f->(@columns);
+        @columns = ();
+        $columns[$_][0] = $fields[$_] for 0 .. $#fields;
+      }
+    }
+    if (@columns) {
+      $_ = ${$columns[0]}[0];
+      print $_, "\n" for $f->(@columns);
     }
   },
 
