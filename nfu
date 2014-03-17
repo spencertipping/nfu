@@ -7,6 +7,15 @@ use strict;
 use warnings;
 use POSIX qw(dup2);
 
+# NB: This import is not used in nfu directly; it's here so you can use these
+# functions inside aggregators.
+use List::Util qw(first max maxstr min minstr reduce shuffle sum);
+
+# Same for this, which is especially useful from aggregators because multiple
+# values create multiple output rows, not multiple columns on the same output
+# row.
+sub row {join "\t", @_}
+
 $|++;
 
 binmode STDOUT, ':utf8';
