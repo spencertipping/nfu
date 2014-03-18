@@ -147,3 +147,7 @@ order matters; `nfu -sc` and `nfu -cs` do two completely different things.
 - `-s`, `--sum`: Takes a running total of the given numbers.
 - `-S`, `--slice`: Takes two numbers: #lines to chop from head, #lines to chop
   from tail.
+- `-V`, `--variance`: Running variance of the first column.
+
+### Long-only options
+- `--sd`: Running standard deviation of the first column.

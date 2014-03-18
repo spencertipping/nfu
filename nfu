@@ -71,6 +71,9 @@ my %arity = (
   quant      => 1,
   reduce     => 2,
   variance   => 0,
+
+  # Commands with no shorthands
+  sd         => 0,
 );
 
 sub exec_with_diamond {
@@ -341,6 +344,20 @@ my %functions = (
       $sx2 += $x * $x;
       ++$count;
       print join("\t", ($sx2 - ($sx * $sx / $count)) / $count, @xs), "\n";
+    }
+  },
+
+  sd => sub {
+    my $sx    = 0;
+    my $sx2   = 0;
+    my $count = 0;
+    while (<>) {
+      chomp;
+      my ($x, @xs) = split /\t/;
+      $sx  += $x;
+      $sx2 += $x * $x;
+      ++$count;
+      print join("\t", sqrt(($sx2 - ($sx * $sx / $count)) / $count), @xs), "\n";
     }
   },
 );
