@@ -335,6 +335,7 @@ my %functions = (
     my $sx2   = 0;
     my $count = 0;
     while (<>) {
+      chomp;
       my ($x, @xs) = split /\t/;
       $sx  += $x;
       $sx2 += $x * $x;
