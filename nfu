@@ -305,9 +305,7 @@ my %functions = (
     while (<>) {
       chomp;
       my @xs = split /\t/;
-      my @ys = $f->(@xs);
-      print @ys > 1 ? join("\t", @ys)
-                    : join("\t", $ys[0], @xs[1 .. $#xs]), "\n" if @ys;
+      print $_, "\n" for $f->(@xs);
     }
   },
 
