@@ -450,10 +450,10 @@ while (@exploded) {
   } elsif (-e $command) {
     # It's really a filename, so push it onto @ARGV. If it's compressed, run it
     # through the appropriate decompressor first.
-    my $piped = $command =~ s/^(.*\.gz)/$1 | gzip -d/ri
-                         =~ s/^(.*\.bz2)/$1 | bzip -d/ri
-                         =~ s/^(.*\.xz)/$1 | xz -d/ri
-                         =~ s/^(.*\.lzo)/$1 | lzop -d/ri;
+    my $piped = $command =~ s/^(.*\.gz)/cat '$1' | gzip -d/ri
+                         =~ s/^(.*\.bz2)/cat '$1' | bzip -d/ri
+                         =~ s/^(.*\.xz)/cat '$1' | xz -d/ri
+                         =~ s/^(.*\.lzo)/cat '$1' | lzop -d/ri;
     push @ARGV, $piped =~ /\|/ ? "$piped |" : $piped;
   } elsif ($command =~ /(\w*@?[^:]+):(.*)$/) {
     # Access file over SSH
