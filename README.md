@@ -83,6 +83,26 @@ $ seq 100 | nfu -lq0.01                 # list of logs, two decimal places
 $ nfu -F:f6gcO /etc/passwd              # login shells by frequency
 ```
 
+### Local map/reduce
+`nfu` can also be used to create local map/reduce workflows. The key is the
+sequence `-gA`, which lets you process all inputs whose first column has the
+same value. For example, suppose you want to find the average word length for
+each two-letter suffix:
+
+```
+$ nfu -v /usr/share/dict/words \
+      -e '($1, length %0) if %0 =~ /(..)$/g' \  # map into (suffix, length)
+      -gA 'row $_, sum(@{%1}) / @{%1}'          # reduce into (suffix, avg)
+```
+
+Unlike real map/reduce, this collects all grouped records into memory at once
+and uses no parallelization. But it may still be useful for debugging and
+prototyping when you have a large dataset made of small facets.
+
+(Note that `row ...` is just a shorthand for `join "\t", ...`; `-A` puts
+multiple values on multiple lines, so `row` flattens the result into a single
+line with multiple columns.)
+
 ## Environment variables
 Listed here with default values.
 
@@ -103,7 +123,8 @@ order matters; `nfu -sc` and `nfu -cs` do two completely different things.
   expression is invoked with `@_` containing a series of column arrays of
   values (in references). `$_` and `$_[0][0]` both refer to the join key. Note
   that unlike `eval`, any array returned from an aggregation function will
-  produce multiple output rows, not columns.
+  produce multiple output rows, not columns. You can use the `row` function as
+  a shorthand for `join "\t", ...` if you just want a single output row.
 - `-c`, `--count`: Counts adjacent, equivalent items. You should probably use
   `-g` before this unless your data is already grouped or you just want run
   lengths.
