@@ -128,7 +128,7 @@ my %functions = (
   },
 
   average => sub {
-    my $size = $_[0];
+    my $size = $_[0] // 0;
     my ($n, $total) = (0, 0);
     my @window = ();
     while (<>) {
