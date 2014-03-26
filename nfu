@@ -352,7 +352,7 @@ my %functions = (
 
   number => sub {
     my $n = 0;
-    print ++$n, $_ while <>;
+    chomp, print row(++$n, split /\t/), "\n" while <>;
   },
 
   variance => sub {
