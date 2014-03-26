@@ -32,14 +32,18 @@ Most `nfu` commands operate on the first column, leaving the others untouched.
 
 ## Syntax
 ```sh
-$ nfu [-v|--verbose] [options...] [files...]
+$ nfu [options...] [files...]
 ```
 
-`nfu` will automatically uncompress any files ending in `.xz`, `.bz2`, or
-`.gz`, and will behave like `cat` if you give it multiple files. If you use
-`-v`, each file's data transfer rate will be measured using `pv`, `pipemeter`,
-or `cpipe` (whichever is on your system, failing over to `cat` if none). Note
-that `-v` must be the first option if specified.
+`nfu` will automatically uncompress any files ending in `.xz`, `.bz2`, `.lzo`,
+or `.gz`, and will behave like `cat` if you give it multiple files. If you use
+`-v`, each file's data transfer rate will be measured using `pv` or `pipemeter`
+(whichever is on your system, failing over to `cat` if none). `-v` can be used
+anywhere to measure throughput and total transfer through any piece of the
+pipeline you're constructing.
+
+Files can also be specified as `[http[s]:]//website/path` (handled with curl)
+or `[user@]host:path/file` (handled with `ssh -C`).
 
 `nfu` accepts both long-form and short-form options, and there are a couple of
 different ways to write numbers. This is especially relevant if you're using
@@ -148,6 +152,9 @@ order matters; `nfu -sc` and `nfu -cs` do two completely different things.
 - `-S`, `--slice`: Takes two numbers: #lines to chop from head, #lines to chop
   from tail.
 - `-V`, `--variance`: Running variance of the first column.
+- `-v`, `--verbose`: Measures data throughput interactively on stderr, emitting
+  it untransformed. This can be used anywhere in your pipeline, though
+  pipemeter doesn't stack like pv does.
 
 ### Long-only options
 - `--sd`: Running standard deviation of the first column.

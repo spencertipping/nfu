@@ -43,7 +43,7 @@ my %explosions = (
   p => '--plot',
   P => '--poll',
   r => '--reduce',
-  # -v means --verbose; can't use it here
+  v => '--verbose',
   V => '--variance',
 );
 
@@ -71,22 +71,23 @@ my %arity = (
   quant      => 1,
   reduce     => 2,
   variance   => 0,
+  verbose    => 0,
 
   # Commands with no shorthands
   sd         => 0,
 );
 
 sub exec_with_diamond {
-  if (@ARGV) {
-    # Arguments are specified in filenames and may be compressed, so use perl
+  if (grep /\|/, @ARGV) {
+    # Arguments are specified in filenames and involve processes, so use perl
     # to forward data.
     open(my $fh, '|' . join(' ', map {"'$_'"} @_)) or die "failed to exec @_";
     print $fh $_ while <>;
     close $fh;
   } else {
     # Faster option: just exec the program in-place. This avoids a layer of
-    # interprocess piping.
-    exec @_ or die "failed to exec @_";
+    # interprocess piping. Assume filenames follow arguments.
+    exec @_, @ARGV or die "failed to exec @_ @ARGV";
   }
 }
 
@@ -360,6 +361,24 @@ my %functions = (
       print join("\t", sqrt(($sx2 - ($sx * $sx / $count)) / $count), @xs), "\n";
     }
   },
+
+  verbose => sub {
+    # Look for any number of pipe metering tools the user might have installed.
+    # cpipe won't work here because it's incompatible with exec_with_diamond
+    # (since it doesn't accept filenames).
+    my $have_pv        = !system 'which pv        > /dev/null';
+    my $have_pipemeter = !system 'which pipemeter > /dev/null';
+
+    my $pv_prefix = $have_pv        ? 'pv'
+                  : $have_pipemeter ? 'pipemeter' : 'cat';
+
+    if ($pv_prefix eq 'cat') {
+      print STDERR "nfu: requested verbose operation, but neither pv\n";
+      print STDERR "nor pipemeter is installed\n";
+    }
+
+    exec_with_diamond $pv_prefix;
+  },
 );
 
 sub explode {
@@ -367,27 +386,9 @@ sub explode {
   map {$explosions{$_} // $_} grep length, split /([.\d]*),?/;
 }
 
-my $reader    = undef;
-my $verbose   = shift @ARGV if $ARGV[0] eq '-v' || $ARGV[0] eq '--verbose';
-my @exploded  = map explode, @ARGV;
-my @parsed    = ();
-
-my $pv_prefix = 'cat';
-if ($verbose) {
-  # Look for any number of pipe metering tools the user might have installed.
-  my $have_pv        = !system 'which pv        > /dev/null';
-  my $have_pipemeter = !system 'which pipemeter > /dev/null';
-  my $have_cpipe     = !system 'which cpipe     > /dev/null';
-
-  $pv_prefix = $have_pv        ? 'pv'
-             : $have_pipemeter ? 'pipemeter'
-             : $have_cpipe     ? 'cpipe -vt <' : 'cat';
-
-  if ($pv_prefix eq 'cat') {
-    print STDERR "nfu: requested verbose operation, but none of pv,\n";
-    print STDERR "pipemeter, or cpipe is installed\n";
-  }
-}
+my $reader   = undef;
+my @exploded = map explode, @ARGV;
+my @parsed   = ();
 
 @ARGV = ();
 
@@ -401,14 +402,20 @@ while (@exploded) {
   if (defined(my $arity = $arity{$command})) {
     my @args = splice @exploded, 0, $arity;
     push @parsed, [$command, @args];
-  } elsif (-f $command) {
+  } elsif (-e $command) {
     # It's really a filename, so push it onto @ARGV. If it's compressed, run it
     # through the appropriate decompressor first.
-    push @ARGV, "$pv_prefix " . ($command =~ s/^(.*\.gz)/$1 | gzip -d/ri
-                                          =~ s/^(.*\.bz2)/$1 | bzip -d/ri
-                                          =~ s/^(.*\.xz)/$1 | xz -d/ri
-                                          =~ s/^(.*\.lzo)/$1 | lzop -d/ri)
-                              . ' |';
+    my $piped = $command =~ s/^(.*\.gz)/$1 | gzip -d/ri
+                         =~ s/^(.*\.bz2)/$1 | bzip -d/ri
+                         =~ s/^(.*\.xz)/$1 | xz -d/ri
+                         =~ s/^(.*\.lzo)/$1 | lzop -d/ri;
+    push @ARGV, $piped =~ /\|/ ? "$piped |" : $piped;
+  } elsif ($command =~ /(\w*@?[^:]+):(.*)$/) {
+    # Access file over SSH
+    push @ARGV, "ssh -C '$1' cat '$2' |";
+  } elsif ($command =~ s/^(?:http(s?):)?\/\//"http" . ($1 || '') . ":\/\/"/e) {
+    # Assume a URL and curl it
+    push @ARGV, "curl $command |";
   } else {
     die "nonexistent command/file: $command";
   }
