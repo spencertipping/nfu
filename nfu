@@ -35,6 +35,7 @@ my %explosions = (
   J => '--jsonflat',
   l => '--log',
   L => '--exp',
+  n => '--number',
   o => '--order',
   O => '--rorder',
   s => '--sum',
@@ -43,6 +44,7 @@ my %explosions = (
   p => '--plot',
   P => '--poll',
   r => '--reduce',
+  R => '--remove',
   v => '--verbose',
   V => '--variance',
 );
@@ -62,6 +64,7 @@ my %arity = (
   jsonflat   => 1,
   log        => 0,
   exp        => 0,
+  number     => 0,
   order      => 0,
   rorder     => 0,
   plot       => 1,
@@ -70,6 +73,7 @@ my %arity = (
   slice      => 2,
   quant      => 1,
   reduce     => 2,
+  remove     => 1,
   variance   => 0,
   verbose    => 0,
 
@@ -263,6 +267,18 @@ my %functions = (
     }
   },
 
+  remove => sub {
+    (my $code = $_[0]) =~ s/%(\d+)/\$_[$1]/g;
+    my $f = eval "sub {\n" . $code . "\n}" or
+            die "failed to compile eval function: $@\n  (code was $code)";
+    local $_ = '';
+    while (my $line = <>) {
+      chomp $line;
+      my @xs = split /\t/, $line;
+      print join("\t", @xs), "\n" unless $f->(@xs);
+    }
+  },
+
   json => sub {
     require JSON or die 'nfu: unable to load JSON module';
     JSON->import;
@@ -332,6 +348,11 @@ my %functions = (
   fieldsplit => sub {
     my $delim = qr/$_[0]/;
     chomp, print join("\t", split /$delim/), "\n" while <>;
+  },
+
+  number => sub {
+    my $n = 0;
+    print ++$n, $_ while <>;
   },
 
   variance => sub {

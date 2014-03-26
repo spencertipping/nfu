@@ -157,6 +157,7 @@ order matters; `nfu -sc` and `nfu -cs` do two completely different things.
   can use the `row(...)` function to join values with tabs.
 - `-l`, `--log`: Log-transforms every value.
 - `-L`, `--exp`: Exponent-transforms every value.
+- `-n`, `--number`: Prefixes each line with a line number, beginning with 1.
 - `-o`, `--order`: Orders elements by numeric value.
 - `-O`, `--rorder`: Same as `order`, but reverses the sort.
 - `-p`, `--plot`: Plots the input data as-is. You may need to reorder or slice
@@ -169,6 +170,8 @@ order matters; `nfu -sc` and `nfu -cs` do two completely different things.
 - `-r`, `--reduce`: Identical to `eval`, but takes a first argument specifying
   the initial value for `$_`. For example, `nfu -r 0 '$_ += %0'` is the same as
   `nfu -s`.
+- `-R`, `--remove`: Analogous to `eval`, but removes any row for which the
+  expression returns a truthy value.
 - `-s`, `--sum`: Takes a running total of the given numbers.
 - `-S`, `--slice`: Takes two numbers: #lines to chop from head, #lines to chop
   from tail.
