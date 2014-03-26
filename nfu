@@ -414,6 +414,16 @@ my %functions = (
 
     exec_with_diamond $pv_prefix;
   },
+
+  preview => sub {
+    my $have_less = !system 'which less > /dev/null';
+    my $have_more = !system 'which more > /dev/null';
+
+    my $less_program = $have_less ? 'less'
+                     : $have_more ? 'more' : 'cat';
+
+    exec_with_diamond $less_program;
+  },
 );
 
 sub explode {
@@ -454,6 +464,13 @@ while (@exploded) {
   } else {
     die "nonexistent command/file: $command";
   }
+}
+
+unless ($ENV{NFU_NO_PAGER}) {
+  # tty detection trick from
+  # http://stackoverflow.com/questions/6955191/how-do-i-check-if-a-perl-script-is-running-in-a-terminal
+  push @parsed, ['preview'] if open my $tty, '+<', '/dev/tty';
+  close $tty;
 }
 
 if (@parsed) {

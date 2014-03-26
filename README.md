@@ -112,6 +112,9 @@ NFU_SORT_PARALLEL=4                     # max parallel mergesorts
 NFU_SORT_COMPRESS=                      # program to compress disk temps
 ```
 
+You can set `NFU_NO_PAGER` to any truthy string value to prevent nfu from using
+`less` to preview results sent to a terminal.
+
 ## Commands
 `nfu` chains commands together just like a shell pipeline. This means that
 order matters; `nfu -sc` and `nfu -cs` do two completely different things.
