@@ -157,6 +157,9 @@ order matters; `nfu -sc` and `nfu -cs` do two completely different things.
   can use the `row(...)` function to join values with tabs.
 - `-l`, `--log`: Log-transforms every value.
 - `-L`, `--exp`: Exponent-transforms every value.
+- `-m`, `--map`: Just like `eval`, but multiple values are emitted on multiple
+  lines. If you want multiple columns on a single line, you can use the `row`
+  function, which is a shorthand for `join "\t"`.
 - `-n`, `--number`: Prefixes each line with a line number, beginning with 1.
 - `-o`, `--order`: Orders elements by numeric value.
 - `-O`, `--rorder`: Same as `order`, but reverses the sort.

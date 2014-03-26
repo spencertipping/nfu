@@ -35,6 +35,7 @@ my %explosions = (
   J => '--jsonflat',
   l => '--log',
   L => '--exp',
+  m => '--map',
   n => '--number',
   o => '--order',
   O => '--rorder',
@@ -64,6 +65,7 @@ my %arity = (
   jsonflat   => 1,
   log        => 0,
   exp        => 0,
+  map        => 1,
   number     => 0,
   order      => 0,
   rorder     => 0,
@@ -250,6 +252,18 @@ my %functions = (
       my @ys = $f->(@xs);
       print @ys > 1 ? join("\t", @ys)
                     : join("\t", $ys[0], @xs[1 .. $#xs]), "\n" if @ys;
+    }
+  },
+
+  map => sub {
+    (my $code = $_[0]) =~ s/%(\d+)/\$_[$1]/g;
+    my $f = eval "sub {\n" . $code . "\n}" or
+            die "failed to compile eval function: $@\n  (code was $code)";
+    local $_ = '';
+    while (my $line = <>) {
+      chomp $line;
+      my @xs = split /\t/, $line;
+      print "$_\n" for $f->(@xs);
     }
   },
 
