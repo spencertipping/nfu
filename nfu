@@ -25,6 +25,14 @@ sub uniq {
   @order;
 }
 
+sub frequencies {
+  my %freqs;
+  ++$freqs{$_} for @_;
+  %freqs;
+}
+
+sub mean {scalar @_ && sum(@_) / @_}
+
 $|++;
 
 binmode STDOUT, ':utf8';
