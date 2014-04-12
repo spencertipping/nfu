@@ -153,6 +153,10 @@ order matters; `nfu -sc` and `nfu -cs` do two completely different things.
 - `-g`, `--group`: Pipes data through `sort` to create groups of equivalent
   entries. Assumes lexicographic, not numeric, sort.
 - `-G`, `--rgroup`: Same as `group`, but reverses the sort order.
+- `-i`, `--index`: Takes a zero-based field number and a path to an index file,
+  and uses `join` to inner-join on the given field.
+- `-I`, `--indexouter`: Same as `--index`, but uses an outer left join (where
+  the "left" side is the primary nfu data stream).
 - `-j`, `--json`: Same as `eval`, but the first field is automatically parsed
   as JSON and the result stored in `$_`. Also, any `.(\w+)` in the expression
   are converted to `->{'$1'}`, so you can write `$_.foo` instead of

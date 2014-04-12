@@ -48,6 +48,8 @@ my %explosions = (
   F => '--fieldsplit',
   g => '--group',
   G => '--rgroup',
+  i => '--index',
+  I => '--indexouter',
   j => '--json',
   J => '--jsonflat',
   l => '--log',
@@ -78,6 +80,8 @@ my %arity = (
   fieldsplit => 1,
   group      => 0,
   rgroup     => 0,
+  index      => 2,
+  indexouter => 2,
   json       => 1,
   jsonflat   => 1,
   log        => 0,
@@ -116,6 +120,7 @@ sub exec_with_diamond {
 }
 
 sub sort_options {
+  '-k1b,1',
   '-S', $ENV{NFU_SORT_BUFFER} || '256M',
   '--parallel=' . ($ENV{NFU_SORT_PARALLEL} || 4),
   ($ENV{NFU_SORT_COMPRESS} ? ("--compress-program=$ENV{NFU_SORT_COMPRESS}")
@@ -128,7 +133,7 @@ my %functions = (
   order  => sub {exec_with_diamond 'sort', '-g', sort_options},
   rorder => sub {exec_with_diamond 'sort', '-rg', sort_options},
 
-  count  => sub {
+  count => sub {
     # Same behavior as uniq -c, but delimits counts with \t
     chomp(my $last = <>);
     my $count = 1;
@@ -143,6 +148,26 @@ my %functions = (
       }
     }
     print "$count\t$last\n";
+  },
+
+  index => sub {
+    # Inner join by appending joined fields to the end.
+    my ($field_index, $join_file) = @_;
+    ++$field_index;
+    open my($to_join), "| join -t '\t' -1 $field_index - '$join_file'"
+      or die "failed to exec join -1 $field_index - $join_file: $!";
+    print $to_join $_ while <>;
+    close $to_join;
+  },
+
+  indexouter => sub {
+    # Outer left join by appending joined fields to the end.
+    my ($field_index, $join_file) = @_;
+    ++$field_index;
+    open my($to_join), "| join -a 1 -t '\t' -1 $field_index - '$join_file'"
+      or die "failed to exec join -a 1 -1 $field_index - $join_file: $!";
+    print $to_join $_ while <>;
+    close $to_join;
   },
 
   average => sub {
