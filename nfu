@@ -421,15 +421,15 @@ my %functions = (
     my $have_pv        = !system 'which pv        > /dev/null';
     my $have_pipemeter = !system 'which pipemeter > /dev/null';
 
-    my $pv_prefix = $have_pv        ? 'pv -c'
+    my @pv_prefix = $have_pv        ? qw/pv -c/
                   : $have_pipemeter ? 'pipemeter' : 'cat';
 
-    if ($pv_prefix eq 'cat') {
+    if ($pv_prefix[0] eq 'cat') {
       print STDERR "nfu: requested verbose operation, but neither pv\n";
       print STDERR "nor pipemeter is installed\n";
     }
 
-    exec_with_diamond $pv_prefix;
+    exec_with_diamond @pv_prefix;
   },
 
   preview => sub {
