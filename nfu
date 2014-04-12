@@ -125,8 +125,8 @@ sub sort_options {
 my %functions = (
   group  => sub {exec_with_diamond 'sort', sort_options},
   rgroup => sub {exec_with_diamond 'sort', '-r', sort_options},
-  order  => sub {exec_with_diamond 'sort', '-n', sort_options},
-  rorder => sub {exec_with_diamond 'sort', '-rn', sort_options},
+  order  => sub {exec_with_diamond 'sort', '-g', sort_options},
+  rorder => sub {exec_with_diamond 'sort', '-rg', sort_options},
 
   count  => sub {
     # Same behavior as uniq -c, but delimits counts with \t
