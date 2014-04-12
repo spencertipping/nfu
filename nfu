@@ -98,6 +98,7 @@ my %arity = (
 
   # Commands with no shorthands
   sd         => 0,
+  bits       => 1,
 );
 
 sub exec_with_diamond {
@@ -440,6 +441,20 @@ my %functions = (
                      : $have_more ? 'more' : 'cat';
 
     exec_with_diamond $less_program;
+  },
+
+  bits => sub {
+    # Kind of a strange operation used to compute entropy-per-element; this is
+    # the -log_2(P) component of the entropy of something, and the argument is
+    # the total (or 1 if your elements are already probabilities).
+    my ($n) = @_;
+    $n ||= 1;
+
+    while (<>) {
+      chomp;
+      my @xs = split /\t/;
+      print join("\t", $xs[0] ? -log($xs[0] / $n) / log 2 : 0, @xs[1..$#xs]), "\n";
+    }
   },
 );
 

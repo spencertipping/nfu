@@ -192,3 +192,7 @@ order matters; `nfu -sc` and `nfu -cs` do two completely different things.
 
 ### Long-only options
 - `--sd`: Running standard deviation of the first column.
+- `--bits`: Takes the total of a list of numbers, and returns the number of
+  bits required to arithmetic-encode any given row, given that the row's
+  numbers represent relative frequencies. You can use this to compute the
+  entropy of a statistical distribution.
