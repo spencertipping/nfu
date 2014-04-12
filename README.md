@@ -32,7 +32,7 @@ Most `nfu` commands operate on the first column, leaving the others untouched.
 
 ## Syntax
 ```sh
-$ nfu [options...] [files...]
+$ nfu [--use file.pl]... [options...] [files...]
 ```
 
 `nfu` will automatically uncompress any files ending in `.xz`, `.bz2`, `.lzo`,
@@ -44,6 +44,10 @@ pipeline you're constructing.
 
 Files can also be specified as `[http[s]:]//website/path` (handled with curl)
 or `[user@]host:path/file` (handled with `ssh -C`).
+
+The `--use` option lets you load files with Perl definitions in them. These
+definitions are then visible to any code nfu compiles. Note that all `--use`
+options must precede filenames and nfu commands.
 
 `nfu` accepts both long-form and short-form options, and there are a couple of
 different ways to write numbers. This is especially relevant if you're using

@@ -448,6 +448,13 @@ sub explode {
   map {$explosions{$_} // $_} grep length, split /([.\d]*),?/;
 }
 
+# Load 'use' modules before any forking.
+while (@ARGV and $ARGV[0] eq '--use') {
+  shift @ARGV;
+  do shift @ARGV;
+  die $@ if $@;
+}
+
 my $reader   = undef;
 my @exploded = map explode, @ARGV;
 my @parsed   = ();
@@ -483,12 +490,10 @@ while (@exploded) {
   }
 }
 
-unless ($ENV{NFU_NO_PAGER}) {
-  # tty detection trick from
-  # http://stackoverflow.com/questions/6955191/how-do-i-check-if-a-perl-script-is-running-in-a-terminal
-  push @parsed, ['preview'] if open my $tty, '+<', '/dev/tty';
-  close $tty;
-}
+# Open output in an interactive previewer if...
+push @parsed, ['preview'] if !$ENV{NFU_NO_PAGER}    # we can page
+                          && (!-t STDIN || @ARGV)   # not interacting for input
+                          && -t STDOUT;             # interacting for output
 
 if (@parsed) {
   # Note: the loop below uses pipe/fork/dup2 instead of a more idiomatic Open2
