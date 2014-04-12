@@ -16,6 +16,15 @@ use List::Util qw(first max maxstr min minstr reduce shuffle sum);
 # row.
 sub row {join "\t", @_}
 
+# Order-preserving unique values for strings. This is just too useful not to
+# provide.
+sub uniq {
+  my %seen;
+  my @order;
+  $seen{$_}++ or push @order, $_ for @_;
+  @order;
+}
+
 $|++;
 
 binmode STDOUT, ':utf8';
