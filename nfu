@@ -421,7 +421,7 @@ my %functions = (
     my $have_pv        = !system 'which pv        > /dev/null';
     my $have_pipemeter = !system 'which pipemeter > /dev/null';
 
-    my $pv_prefix = $have_pv        ? 'pv'
+    my $pv_prefix = $have_pv        ? 'pv -c'
                   : $have_pipemeter ? 'pipemeter' : 'cat';
 
     if ($pv_prefix eq 'cat') {
