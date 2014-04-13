@@ -173,11 +173,11 @@ my %functions = (
 
   index => sub {
     # Inner join by appending joined fields to the end.
-    my ($field_index, $join_file) = @_;
+    my ($field_index, $join_cmd) = @_;
     ++$field_index;
 
-    my $sorted_index = fifo_for sort_cmd '-k1b,1', "'$join_file'";
-    my $command = sort_cmd "-k${field_index}b,$field_index" .
+    my $sorted_index = fifo_for $join_cmd . '|' . sort_cmd "-t '\t' -k1b,1";
+    my $command = sort_cmd "-t '\t' -k ${field_index}b,$field_index" .
                   "| join -t '\t' -1 $field_index - '$sorted_index'";
 
     open my $to_join, "| $command" or die "failed to exec $command: $!";
@@ -187,11 +187,11 @@ my %functions = (
 
   indexouter => sub {
     # Outer left join by appending joined fields to the end.
-    my ($field_index, $join_file) = @_;
+    my ($field_index, $join_cmd) = @_;
     ++$field_index;
 
-    my $sorted_index = fifo_for sort_cmd '-k1b,1', "'$join_file'";
-    my $command = sort_cmd "-k${field_index}b,$field_index" .
+    my $sorted_index = fifo_for $join_cmd . '|' . sort_cmd "-t '\t' -k 1b,1";
+    my $command = sort_cmd "-t '\t' -k ${field_index}b,$field_index" .
                   "| join -a 1 -t '\t' -1 $field_index - '$sorted_index'";
 
     open my $to_join, "| $command" or die "failed to exec $command: $!";
