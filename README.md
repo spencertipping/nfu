@@ -154,7 +154,8 @@ order matters; `nfu -sc` and `nfu -cs` do two completely different things.
   entries. Assumes lexicographic, not numeric, sort.
 - `-G`, `--rgroup`: Same as `group`, but reverses the sort order.
 - `-i`, `--index`: Takes a zero-based field number and a path to an index file,
-  and uses `join` to inner-join on the given field.
+  and uses `join` to inner-join on the given field. The first column of the
+  index file is always used, and neither side needs to be sorted.
 - `-I`, `--indexouter`: Same as `--index`, but uses an outer left join (where
   the "left" side is the primary nfu data stream).
 - `-j`, `--json`: Same as `eval`, but the first field is automatically parsed
@@ -193,6 +194,8 @@ order matters; `nfu -sc` and `nfu -cs` do two completely different things.
 - `-v`, `--verbose`: Measures data throughput interactively on stderr, emitting
   it untransformed. This can be used anywhere in your pipeline, though
   pipemeter doesn't stack like pv does.
+- `-w`, `--with`: Takes a quoted shell command and joins line-wise (analogous
+  to a list zip).
 
 ### Long-only options
 - `--sd`: Running standard deviation of the first column.

@@ -5,7 +5,15 @@
 use v5.10;
 use strict;
 use warnings;
-use POSIX qw(dup2);
+use POSIX qw(dup2 mkfifo :sys_wait_h);
+use File::Temp qw(tmpnam);
+
+# Setup child capture. All we need to do is wait for child pids; there's no
+# formal teardown.
+$SIG{CHLD} = sub {
+  local ($!, $?);
+  waitpid -1, WNOHANG;
+};
 
 # NB: This import is not used in nfu directly; it's here so you can use these
 # functions inside aggregators.
@@ -32,8 +40,6 @@ sub frequencies {
 }
 
 sub mean {scalar @_ && sum(@_) / @_}
-
-$|++;
 
 binmode STDOUT, ':utf8';
 
@@ -67,6 +73,7 @@ my %explosions = (
   R => '--remove',
   v => '--verbose',
   V => '--variance',
+  w => '--with',
 );
 
 my %arity = (
@@ -99,6 +106,7 @@ my %arity = (
   remove     => 1,
   variance   => 0,
   verbose    => 0,
+  with       => 1,
 
   # Commands with no shorthands
   sd         => 0,
@@ -125,6 +133,18 @@ sub sort_options {
   '--parallel=' . ($ENV{NFU_SORT_PARALLEL} || 4),
   ($ENV{NFU_SORT_COMPRESS} ? ("--compress-program=$ENV{NFU_SORT_COMPRESS}")
                            : ())
+}
+
+sub fifo_for {
+  my ($command) = @_;
+  my $fifo_name = tmpnam;
+
+  mkfifo $fifo_name, 0700 or die "failed to create fifo: $!";
+
+  return $fifo_name if fork;
+  system "$command > '$fifo_name'";
+  unlink $fifo_name or warn "failed to unlink temporary fifo $fifo_name: $!";
+  exit 0;
 }
 
 my %functions = (
@@ -154,8 +174,13 @@ my %functions = (
     # Inner join by appending joined fields to the end.
     my ($field_index, $join_file) = @_;
     ++$field_index;
-    open my($to_join), "| join -t '\t' -1 $field_index - '$join_file'"
-      or die "failed to exec join -1 $field_index - $join_file: $!";
+    my $next = $field_index + 1;
+
+    my $sorted_index = fifo_for "sort -k1b,2 '$join_file'";
+    my $command = "sort -k ${field_index}b,$next \\
+                 | join -t '\t' -1 $field_index - '$sorted_index'";
+
+    open my $to_join, "| $command" or die "failed to exec $command: $!";
     print $to_join $_ while <>;
     close $to_join;
   },
@@ -164,10 +189,28 @@ my %functions = (
     # Outer left join by appending joined fields to the end.
     my ($field_index, $join_file) = @_;
     ++$field_index;
-    open my($to_join), "| join -a 1 -t '\t' -1 $field_index - '$join_file'"
-      or die "failed to exec join -a 1 -1 $field_index - $join_file: $!";
+    my $next = $field_index + 1;
+
+    my $sorted_index = fifo_for "sort -k1b,2 '$join_file'";
+    my $command = "sort -k ${field_index}b,$next \\
+                 | join -t '\t' -a 1 -t '\t' -1 $field_index - '$sorted_index'";
+
+    open my $to_join, "| $command" or die "failed to exec $command: $!";
     print $to_join $_ while <>;
     close $to_join;
+  },
+
+  with => sub {
+    # Like 'paste', but for commands. Joins lines with \t.
+    my ($command) = @_;
+    open my $fh, "$command |" or die "failed to exec $command: $!";
+    my ($part1, $part2);
+    while (defined($part1 = <>) and defined($part2 = <$fh>)) {
+      chomp $part1;
+      chomp $part2;
+      print "$part1\t$part2\n";
+    }
+    close $fh;
   },
 
   average => sub {
