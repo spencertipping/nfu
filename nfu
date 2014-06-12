@@ -8,6 +8,8 @@ use warnings;
 use POSIX qw(dup2 mkfifo :sys_wait_h);
 use File::Temp qw(tmpnam);
 
+++$|;
+
 # Setup child capture. All we need to do is wait for child pids; there's no
 # formal teardown.
 $SIG{CHLD} = sub {
@@ -68,6 +70,7 @@ my %explosions = (
   S => '--slice',
   q => '--quant',
   p => '--plot',
+  3 => '--splot',
   P => '--poll',
   r => '--reduce',
   R => '--remove',
@@ -98,6 +101,7 @@ my %arity = (
   order      => 0,
   rorder     => 0,
   plot       => 1,
+  splot      => 1,
   poll       => 2,
   sum        => 0,
   slice      => 2,
@@ -113,13 +117,32 @@ my %arity = (
   bits       => 1,
 );
 
+my %gnuplot_aliases = (
+  '%l' => 'with lines',
+  '%d' => 'with dots',
+  '%i' => 'with impulses',
+);
+
+sub expand_gnuplot_options {
+  my @transformed_opts;
+  for my $opt (@_) {
+    $opt =~ s/$_/$gnuplot_aliases{$_}/g for keys %gnuplot_aliases;
+    push @transformed_opts, $opt;
+  }
+  @transformed_opts;
+}
+
+sub exec_with_stdin {
+  open(my $fh, '|' . join(' ', map {"'$_'"} @_)) or die "failed to exec @_";
+  print $fh $_ while <>;
+  close $fh;
+}
+
 sub exec_with_diamond {
   if (grep /\|/, @ARGV) {
     # Arguments are specified in filenames and involve processes, so use perl
     # to forward data.
-    open(my $fh, '|' . join(' ', map {"'$_'"} @_)) or die "failed to exec @_";
-    print $fh $_ while <>;
-    close $fh;
+    exec_with_stdin @_;
   } else {
     # Faster option: just exec the program in-place. This avoids a layer of
     # interprocess piping. Assume filenames follow arguments.
@@ -287,7 +310,21 @@ my %functions = (
     }
   },
 
-  plot => sub {exec_with_diamond 'gnuplot', '-e', "plot \"-\" @_", '-persist'},
+  # Note: this needs to be stdin; otherwise "nfu -p %l filename" will fail
+  # (since exec_with_diamond trieds to pass filename straight into gnuplot).
+  plot => sub {
+    exec_with_stdin 'gnuplot',
+                    '-e',
+                    'plot "-" ' . join(' ', expand_gnuplot_options @_),
+                    '-persist';
+  },
+
+  splot => sub {
+    exec_with_stdin 'gnuplot',
+                    '-e',
+                    'splot "-" ' . join(' ', expand_gnuplot_options @_),
+                    '-persist';
+  },
 
   poll => sub {
     my ($sleep, $command) = @_;
@@ -484,20 +521,27 @@ my %functions = (
 
   verbose => sub {
     # Look for any number of pipe metering tools the user might have installed.
-    # cpipe won't work here because it's incompatible with exec_with_diamond
-    # (since it doesn't accept filenames).
     my $have_pv        = !system 'which pv        > /dev/null';
     my $have_pipemeter = !system 'which pipemeter > /dev/null';
+    my $have_cpipe     = !system 'which cpipe     > /dev/null';
 
     my @pv_prefix = $have_pv        ? qw/pv -c/
-                  : $have_pipemeter ? 'pipemeter' : 'cat';
+                  : $have_pipemeter ? 'pipemeter'
+                  : $have_cpipe     ? 'cpipe'
+                  : $ENV{NFU_VERBOSE_COMMAND} // 'cat';
 
     if ($pv_prefix[0] eq 'cat') {
-      print STDERR "nfu: requested verbose operation, but neither pv\n";
-      print STDERR "nor pipemeter is installed\n";
+      print STDERR "nfu: requested verbose operation, but none of pv,\n";
+      print STDERR "pipemeter, or cpipe is installed\n";
+      print STDERR "(you can specify a custom verbose command by setting\n";
+      print STDERR "NFU_VERBOSE_COMMAND, e.g:\n";
+      print STDERR "export NFU_VERBOSE_COMMAND=`which cpipe`)\n";
     }
 
-    exec_with_diamond @pv_prefix;
+    # Assume that any NFU_VERBOSE_COMMAND is capable of taking a filename
+    # argument.
+    $pv_prefix[0] eq 'cpipe' ? exec_with_stdin(@pv_prefix)
+                             : exec_with_diamond(@pv_prefix);
   },
 
   preview => sub {
@@ -561,12 +605,15 @@ while (@exploded) {
                          =~ s/^(.*\.xz)/cat '$1' | xz -d/ri
                          =~ s/^(.*\.lzo)/cat '$1' | lzop -d/ri;
     push @ARGV, $piped =~ /\|/ ? "$piped |" : $piped;
-  } elsif ($command =~ /(\w*@?[^:]+):(.*)$/) {
-    # Access file over SSH
-    push @ARGV, "ssh -C '$1' cat '$2' |";
   } elsif ($command =~ s/^(?:http(s?):)?\/\//"http" . ($1 || '') . ":\/\/"/e) {
     # Assume a URL and curl it
     push @ARGV, "curl $command |";
+  } elsif ($command =~ s/^sh://) {
+    # Execute a command and capture stdout
+    push @ARGV, "$command |";
+  } elsif ($command =~ /(\w*@?[^:]+):(.*)$/) {
+    # Access file over SSH
+    push @ARGV, "ssh -C '$1' cat '$2' |";
   } else {
     die "nonexistent command/file: $command";
   }

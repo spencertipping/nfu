@@ -13,7 +13,7 @@ $ egrep -o '\w+' file | sort | uniq -c | sort -rn | \
 Here's what you'd say with `nfu`:
 
 ```sh
-$ egrep -o '\w+' file | nfu -gcOsf0p 'with lines'
+$ egrep -o '\w+' file | nfu -gcOsf0p %l
 ```
 
 - `g` = "group", which sorts things
@@ -42,8 +42,8 @@ or `.gz`, and will behave like `cat` if you give it multiple files. If you use
 anywhere to measure throughput and total transfer through any piece of the
 pipeline you're constructing.
 
-Files can also be specified as `[http[s]:]//website/path` (handled with curl)
-or `[user@]host:path/file` (handled with `ssh -C`).
+Files can also be specified as `[http[s]:]//website/path` (handled with curl),
+`[user@]host:path/file` (handled with `ssh -C`), or `sh:command [args...]`.
 
 The `--use` option lets you load files with Perl definitions in them. These
 definitions are then visible to any code nfu compiles. Note that all `--use`
@@ -74,7 +74,7 @@ $ seq 100 | nfu -lq1                    # almost; q rounds, not truncates
 
 ## Examples
 ```sh
-$ nfu -e length -f0Op 'with lines' nfu  # falloff plot of line lengths of nfu
+$ nfu -e length -f0Op %l nfu            # falloff plot of line lengths of nfu
 $ seq 100 | nfu -sp                     # running total of 1 .. 100
 $ seq 50 | nfu -e '%0 ** 2' -sp         # running total of 1^2, 2^2, ... 50^2
 $ seq 100 | nfu -sssp                   # third-integral of 1 .. 100
@@ -107,6 +107,17 @@ prototyping when you have a large dataset made of small facets.
 multiple values on multiple lines, so `row` flattens the result into a single
 line with multiple columns.)
 
+### gnuplot syntax expansions
+`nfu` expands a few shorthands for common gnuplot options:
+
+- `%l` = `with lines`
+- `%d` = `with dots`
+- `%i` = `with impulses`
+
+So, for instance, `nfu -p %l filename` plots `filename` with lines. Note that
+the space after `-p` is required; otherwise `nfu` will have no idea what you're
+doing.
+
 ## Environment variables
 Listed here with default values.
 
@@ -114,6 +125,7 @@ Listed here with default values.
 NFU_SORT_BUFFER=256M                    # in-memory sort buffer size
 NFU_SORT_PARALLEL=4                     # max parallel mergesorts
 NFU_SORT_COMPRESS=                      # program to compress disk temps
+NFU_VERBOSE_COMMAND=                    # path to pipemeter, pv, or similar
 ```
 
 You can set `NFU_NO_PAGER` to any truthy string value to prevent nfu from using
@@ -123,6 +135,9 @@ You can set `NFU_NO_PAGER` to any truthy string value to prevent nfu from using
 `nfu` chains commands together just like a shell pipeline. This means that
 order matters; `nfu -sc` and `nfu -cs` do two completely different things.
 
+- `-3`, `--splot`: `splot` command for gnuplot. Takes the same options as
+  `--plot`, and applies gnuplot-specific expansions (see "gnuplot syntax
+  expansions" above).
 - `-a`, `--average`: Generates a running average of the last N elements. If N =
   0 or is not provided, then generates a running average of all numbers.
 - `-A`, `--aggregate`: Allows you to transform groups of rows with a Perl
@@ -177,7 +192,9 @@ order matters; `nfu -sc` and `nfu -cs` do two completely different things.
 - `-o`, `--order`: Orders elements by numeric value.
 - `-O`, `--rorder`: Same as `order`, but reverses the sort.
 - `-p`, `--plot`: Plots the input data as-is. You may need to reorder or slice
-  fields to get gnuplot to work correctly.
+  fields to get gnuplot to work correctly. Takes a string of gnuplot options,
+  which are subject to some expansion rules (see "gnuplot syntax expansions"
+  above).
 - `-P`, `--poll`: Takes an interval in seconds and a command, and runs the
   command forever, sleeping by the interval between runs. You can use this to
   generate a stream of data.
