@@ -183,6 +183,7 @@ order matters; `nfu -sc` and `nfu -cs` do two completely different things.
 - `-J`, `--jsonflat`: Just like `--json`, but never re-encodes into JSON, and
   multiple values are placed on separate _lines_, not in separate columns. You
   can use the `row(...)` function to join values with tabs.
+- `-k`, `--keep`: The opposite of `--remove`.
 - `-l`, `--log`: Log-transforms every value.
 - `-L`, `--exp`: Exponent-transforms every value.
 - `-m`, `--map`: Just like `eval`, but multiple values are emitted on multiple
