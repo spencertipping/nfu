@@ -105,7 +105,6 @@ my %arity = (
   order      => 0,
   rorder     => 0,
   plot       => 1,
-  splot      => 1,
   poll       => 2,
   sum        => 0,
   slice      => 2,
@@ -119,8 +118,49 @@ my %arity = (
   with       => 1,
 
   # Commands with no shorthands
+  splot      => 1,
   sd         => 0,
   bits       => 1,
+);
+
+my %usages = (
+  average    => 'window size (0 for full average)',
+  aggregate  => 'aggregator fn',
+  count      => '',
+  delta      => '',
+  drop       => 'n',
+  eval       => 'row fn',
+  every      => 'n (returns every nth row)',
+  fields     => 'string of digits, each a zero-indexed column selector',
+  fieldsplit => 'regexp to use for splitting',
+  group      => '',
+  rgroup     => '',
+  index      => 'field index, command whose output to join against',
+  indexouter => 'field index, command whose output to join against',
+  json       => 'json transformer fn',
+  jsonflat   => 'json transformer fn',
+  keep       => 'row filter fn',
+  log        => '',
+  exp        => '',
+  map        => 'row map fn',
+  number     => '',
+  order      => '',
+  rorder     => '',
+  plot       => 'gnuplot arguments',
+  poll       => 'interval in seconds, command whose output to collect',
+  sum        => '',
+  slice      => '#records to trim from start, #records to trim from end',
+  quant      => 'number to round to',
+  reduce     => 'initial value, reducer fn',
+  remove     => 'inverted row filter fn',
+  sample     => 'row selection probability in [0, 1]',
+  take       => 'n',
+  variance   => '',
+  with       => 'command whose output to join column-wise onto input',
+
+  splot      => 'gnuplot arguments',
+  sd         => '',
+  bits       => 'column total',
 );
 
 my %gnuplot_aliases = (
@@ -608,6 +648,31 @@ my %functions = (
 sub explode {
   return $_ unless s/^-([^-])/$1/;
   map {$explosions{$_} // $_} grep length, split /([.\d]*),?/;
+}
+
+# Print usage if the user clearly doesn't know what they're doing.
+if (!@ARGV || $ARGV[0] =~ /^-[h?]$/
+           || $ARGV[0] =~ /^--(usage|help)$/) {
+  print STDERR "usage: nfu [--use file.pl]* commands...\n";
+  print STDERR "where each command is one of the following:\n\n";
+
+  my $len = 2 + max map length, keys %usages;
+  my %short_lookup;
+  $short_lookup{$explosions{$_} =~ s/^--//r} = $_ for keys %explosions;
+
+  for my $cmd (sort keys %usages) {
+    my $short = $short_lookup{$cmd};
+    $short = defined $short ? "-$short|" : '   ';
+    printf STDERR "    %s%-${len}s %s\n",
+                  $short,
+                  $cmd,
+                  $usages{$cmd} ? "<$usages{$cmd}>" : '';
+  }
+  print STDERR "\n";
+  print STDERR "see https://github.com/spencertipping/nfu for documentation\n";
+  print STDERR "\n";
+
+  exit 1;
 }
 
 # Load 'use' modules before any forking.
