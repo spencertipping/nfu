@@ -50,6 +50,7 @@ my %explosions = (
   A => '--aggregate',
   c => '--count',
   d => '--delta',
+  D => '--drop',
   e => '--eval',
   E => '--every',
   f => '--fields',
@@ -67,14 +68,14 @@ my %explosions = (
   n => '--number',
   o => '--order',
   O => '--rorder',
-  s => '--sum',
-  S => '--slice',
-  q => '--quant',
   p => '--plot',
-  3 => '--splot',
   P => '--poll',
+  q => '--quant',
   r => '--reduce',
   R => '--remove',
+  s => '--sum',
+  S => '--sample',
+  T => '--take',
   v => '--verbose',
   V => '--variance',
   w => '--with',
@@ -85,6 +86,7 @@ my %arity = (
   aggregate  => 1,
   count      => 0,
   delta      => 0,
+  drop       => 1,
   eval       => 1,
   every      => 1,
   fields     => 1,
@@ -110,6 +112,8 @@ my %arity = (
   quant      => 1,
   reduce     => 2,
   remove     => 1,
+  sample     => 1,
+  take       => 1,
   variance   => 0,
   verbose    => 0,
   with       => 1,
@@ -363,6 +367,24 @@ my %functions = (
       print join("\t", int(abs($x) / $quantum + 0.5) * $quantum * $sign, @xs),
             "\n";
     }
+  },
+
+  take => sub {
+    my $n = $_[0] // 1;
+    while (<>) {
+      last if --$n < 0;
+      print;
+    }
+  },
+
+  sample => sub {
+    rand > $_[0] and print while <>;
+  },
+
+  drop => sub {
+    my $n = $_[0] // 1;
+    while (<>) { last if --$n <= 0 }
+    print while <>;
   },
 
   eval => sub {

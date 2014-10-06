@@ -49,20 +49,8 @@ The `--use` option lets you load files with Perl definitions in them. These
 definitions are then visible to any code nfu compiles. Note that all `--use`
 options must precede filenames and nfu commands.
 
-`nfu` accepts both long-form and short-form options, and there are a couple of
-different ways to write numbers. This is especially relevant if you're using
-things like `-S` (`--slice`), which take two numeric arguments:
-
-```sh
-$ nfu --slice 10 10
-$ nfu -S 10 10                          # same thing
-$ nfu -S10,10                           # also the same...
-$ nfu -S10,10p                          # ... but more composable
-$ nfu -a50p                             # works with any numeric-arg command
-```
-
-The other syntactic transformation happens with `-e` (`--eval`), which rewrites
-any `%n` into Perl's more verbose `$_[n]`. As a result:
+`-e` (`--eval`) rewrites any `%n` into Perl's more verbose `$_[n]`. As a
+result:
 
 ```sh
 $ seq 100 | nfu -e 'int log $_[0]'
@@ -82,7 +70,7 @@ $ egrep -o '\w' words | nfu -gcO        # descending letter frequency distributi
 $ seq 100 | shuf > data
 $ nfu -a5 data                          # sliding average of up to 5 elements
 $ nfu -a data                           # running average of all items so far
-$ nfu -S10,10dp data                    # remove first/last 10, delta, plot
+$ nfu --slice 10 10 -dp data            # remove first/last 10, delta, plot
 $ seq 100 | nfu -lq0.01                 # list of logs, two decimal places
 $ nfu -F:f6gcO /etc/passwd              # login shells by frequency
 ```
@@ -135,9 +123,6 @@ You can set `NFU_NO_PAGER` to any truthy string value to prevent nfu from using
 `nfu` chains commands together just like a shell pipeline. This means that
 order matters; `nfu -sc` and `nfu -cs` do two completely different things.
 
-- `-3`, `--splot`: `splot` command for gnuplot. Takes the same options as
-  `--plot`, and applies gnuplot-specific expansions (see "gnuplot syntax
-  expansions" above).
 - `-a`, `--average`: Generates a running average of the last N elements. If N =
   0 or is not provided, then generates a running average of all numbers.
 - `-A`, `--aggregate`: Allows you to transform groups of rows with a Perl
@@ -152,6 +137,7 @@ order matters; `nfu -sc` and `nfu -cs` do two completely different things.
   lengths.
 - `-d`, `--delta`: The inverse of `sum`; returns the difference between
   successive numbers.
+- `-D`, `--drop`: Drops the first N lines.
 - `-e`, `--eval`: Allows you to transform data with a Perl expression.
   Individual fields are available in `@_`. If you return a single value, then
   it replaces the first column; otherwise your data replaces all values in the
@@ -207,8 +193,9 @@ order matters; `nfu -sc` and `nfu -cs` do two completely different things.
 - `-R`, `--remove`: Analogous to `eval`, but removes any row for which the
   expression returns a truthy value.
 - `-s`, `--sum`: Takes a running total of the given numbers.
-- `-S`, `--slice`: Takes two numbers: #lines to chop from head, #lines to chop
-  from tail.
+- `-S`, `--sample`: Takes a probability and returns each record randomly with
+  that probability.
+- `-T`, `--take`: Takes the first N records, discarding the rest.
 - `-V`, `--variance`: Running variance of the first column.
 - `-v`, `--verbose`: Measures data throughput interactively on stderr, emitting
   it untransformed. This can be used anywhere in your pipeline, though
@@ -222,3 +209,8 @@ order matters; `nfu -sc` and `nfu -cs` do two completely different things.
   bits required to arithmetic-encode any given row, given that the row's
   numbers represent relative frequencies. You can use this to compute the
   entropy of a statistical distribution.
+- `--splot`: `splot` command for gnuplot. Takes the same options as `--plot`,
+  and applies gnuplot-specific expansions (see "gnuplot syntax expansions"
+  above).
+- `--slice`: Takes two numbers: #lines to chop from head, #lines to chop from
+  tail.
