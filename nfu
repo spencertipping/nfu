@@ -653,17 +653,17 @@ sub explode {
 # Print usage if the user clearly doesn't know what they're doing.
 if (!@ARGV || $ARGV[0] =~ /^-[h?]$/
            || $ARGV[0] =~ /^--(usage|help)$/) {
-  print STDERR "usage: nfu [--use file.pl]* commands...\n";
+  print STDERR "usage: nfu [--use a.pl --use b.pl ...] [-v|--verbose] [files...] commands...\n";
   print STDERR "where each command is one of the following:\n\n";
 
-  my $len = 2 + max map length, keys %usages;
+  my $len = 3 + max map length, keys %usages;
   my %short_lookup;
   $short_lookup{$explosions{$_} =~ s/^--//r} = $_ for keys %explosions;
 
   for my $cmd (sort keys %usages) {
     my $short = $short_lookup{$cmd};
     $short = defined $short ? "-$short|" : '   ';
-    printf STDERR "    %s%-${len}s %s\n",
+    printf STDERR "  %s--%-${len}s %s\n",
                   $short,
                   $cmd,
                   $usages{$cmd} ? "<$usages{$cmd}>" : '';
