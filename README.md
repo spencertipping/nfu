@@ -204,6 +204,11 @@ order matters; `nfu -sc` and `nfu -cs` do two completely different things.
   to a list zip).
 
 ### Long-only options
+- `--append`: Appends the stdout from a shell command to the current stream.
+- `--prepend`: Prepends the stdout from a shell command to the current stream.
+- `--into`: Duplicates the current stream, both to stdout and to the stdin of
+  the shell command. Any stdout from the command will be interleaved into the
+  current stream. (Using `> /dev/null` will prevent this.)
 - `--sd`: Running standard deviation of the first column.
 - `--bits`: Takes the total of a list of numbers, and returns the number of
   bits required to arithmetic-encode any given row, given that the row's

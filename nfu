@@ -118,6 +118,9 @@ my %arity = (
   with       => 1,
 
   # Commands with no shorthands
+  append     => 1,
+  prepend    => 1,
+  into       => 1,
   splot      => 1,
   sd         => 0,
   bits       => 1,
@@ -158,6 +161,9 @@ my %usages = (
   variance   => '',
   with       => 'command whose output to join column-wise onto input',
 
+  append     => 'shell command; appends its output to current stream',
+  prepend    => 'shell command; prepends its output to current stream',
+  into       => 'shell command; copies stream into stdin of that command',
   splot      => 'gnuplot arguments',
   sd         => '',
   bits       => 'column total',
@@ -579,6 +585,25 @@ my %functions = (
       ++$count;
       print join("\t", ($sx2 - ($sx * $sx / $count)) / $count, @xs), "\n";
     }
+  },
+
+  prepend => sub {
+    system $_[0];
+    print while <>;
+  },
+
+  append => sub {
+    print while <>;
+    system $_[0];
+  },
+
+  into => sub {
+    open my $fh, "| $_[0]";
+    while (<>) {
+      $fh->print($_);
+      print;
+    }
+    close $fh;
   },
 
   sd => sub {
