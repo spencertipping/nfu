@@ -43,6 +43,10 @@ sub frequencies {
 
 sub mean {scalar @_ && sum(@_) / @_}
 
+# This variable will keep track of any state accumulated from --use or --run
+# arguments. This is required for --pmap to work correctly.
+my @uses;
+
 sub quote_self {join ' ', $0, map {"'" . s/'/'\\''/gr . "'"} @_}
 
 binmode STDOUT, ':utf8';
@@ -767,7 +771,6 @@ if ($ARGV[0] eq '--quote') {
 }
 
 # Load 'use' modules before any forking.
-my @uses;
 while (@ARGV and $ARGV[0] =~ /^--(use|run)$/) {
   my $option = shift @ARGV;
   my $x      = shift @ARGV;
