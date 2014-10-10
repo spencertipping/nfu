@@ -491,7 +491,7 @@ my %functions = (
       push @fhs, $fh;
     }
 
-    $fhs[$i++]->print($_) while <>;
+    $fhs[$i++ % @fhs]->print($_) while <>;
     close for @fhs;
   },
 
