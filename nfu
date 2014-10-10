@@ -160,6 +160,7 @@ my %usages = (
   sample     => 'row selection probability in [0, 1]',
   take       => 'n to take first n, +n to take last n',
   variance   => 'running variance',
+  verbose    => 'tracks data throughput at a point in the pipeline',
   with       => 'command whose output to join column-wise onto input',
 
   append     => 'shell command; appends its output to current stream',
@@ -709,8 +710,14 @@ sub explode {
 # Print usage if the user clearly doesn't know what they're doing.
 if (!@ARGV || $ARGV[0] =~ /^-[h?]$/
            || $ARGV[0] =~ /^--(usage|help)$/) {
-  print STDERR "usage: nfu [--use a.pl --use b.pl ...] [-v|--verbose] [files...] commands...\n";
-  print STDERR "where each command is one of the following:\n\n";
+  print STDERR "usage: nfu [prefix-commands...] [input-files...] commands...\n";
+  print STDERR "where prefix commands are:\n\n";
+
+  print STDERR "     --quote  -- quotes args: eval \$(nfu --quote ...)\n";
+  print STDERR "     --use    <file.pl>\n";
+  print STDERR "     --run    <perl code>\n";
+
+  print STDERR "\nand each command is one of the following:\n\n";
 
   my $len = 1 + max map length, keys %usages;
   my %short_lookup;
@@ -732,11 +739,24 @@ if (!@ARGV || $ARGV[0] =~ /^-[h?]$/
   exit 1;
 }
 
-# Load 'use' modules before any forking.
-while (@ARGV and $ARGV[0] eq '--use') {
+if ($ARGV[0] eq '--quote') {
+  # Quote all other arguments so a shell will parse them correctly.
   shift @ARGV;
-  do shift @ARGV;
-  die $@ if $@;
+  print join(' ', $0, map {"'" . s/'/'\\''/gr . "'"} @ARGV), "\n";
+  exit 0;
+}
+
+# Load 'use' modules before any forking.
+while (@ARGV and $ARGV[0] =~ /--(use|run)$/) {
+  my $option = shift @ARGV;
+  my $x      = shift @ARGV;
+  if ($option eq '--run') {
+    eval $x;
+    die "failed to run $x: $@" if $@;
+  } else {
+    do shift @ARGV;
+    die "failed to use $x: $@" if $@;
+  }
 }
 
 my $reader   = undef;
