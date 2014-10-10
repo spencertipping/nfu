@@ -747,7 +747,7 @@ if ($ARGV[0] eq '--quote') {
 }
 
 # Load 'use' modules before any forking.
-while (@ARGV and $ARGV[0] =~ /--(use|run)$/) {
+while (@ARGV and $ARGV[0] =~ /^--(use|run)$/) {
   my $option = shift @ARGV;
   my $x      = shift @ARGV;
   if ($option eq '--run') {
