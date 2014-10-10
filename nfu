@@ -121,51 +121,53 @@ my %arity = (
   append     => 1,
   prepend    => 1,
   into       => 1,
+  partition  => 2,
   splot      => 1,
   sd         => 0,
   bits       => 1,
 );
 
 my %usages = (
-  average    => 'window size (0 for full average)',
+  average    => 'window size (0 for full average) -- running average',
   aggregate  => 'aggregator fn',
-  count      => '',
-  delta      => '',
-  drop       => 'n',
+  count      => 'counts by first column value; like uniq -c',
+  delta      => 'value -> difference from last value',
+  drop       => 'number of records to drop',
   eval       => 'row fn',
   every      => 'n (returns every nth row)',
   fields     => 'string of digits, each a zero-indexed column selector',
   fieldsplit => 'regexp to use for splitting',
-  group      => '',
-  rgroup     => '',
+  group      => 'sorts ascending',
+  rgroup     => 'sorts descending',
   index      => 'field index, command whose output to join against',
   indexouter => 'field index, command whose output to join against',
   json       => 'json transformer fn',
   jsonflat   => 'json transformer fn',
   keep       => 'row filter fn',
-  log        => '',
-  exp        => '',
+  log        => 'log base e of each value',
+  exp        => 'e^x for each value',
   map        => 'row map fn',
-  number     => '',
-  order      => '',
-  rorder     => '',
+  number     => 'prepends line number to each line',
+  order      => 'sorts ascending by general numeric value',
+  rorder     => 'sorts descending by general numeric value',
   plot       => 'gnuplot arguments',
   poll       => 'interval in seconds, command whose output to collect',
-  sum        => '',
+  sum        => 'value -> total += value',
   slice      => '#records to trim from start, #records to trim from end',
   quant      => 'number to round to',
   reduce     => 'initial value, reducer fn',
   remove     => 'inverted row filter fn',
   sample     => 'row selection probability in [0, 1]',
-  take       => 'n',
-  variance   => '',
+  take       => 'n to take first n, +n to take last n',
+  variance   => 'running variance',
   with       => 'command whose output to join column-wise onto input',
 
   append     => 'shell command; appends its output to current stream',
   prepend    => 'shell command; prepends its output to current stream',
   into       => 'shell command; copies stream into stdin of that command',
+  partition  => 'partition id fn, shell command (where {} is partition ID)',
   splot      => 'gnuplot arguments',
-  sd         => '',
+  sd         => 'running standard deviation',
   bits       => 'column total',
 );
 
@@ -416,10 +418,19 @@ my %functions = (
   },
 
   take => sub {
-    my $n = $_[0] // 1;
-    while (<>) {
-      last if --$n < 0;
-      print;
+    if ($_[0] =~ s/^\+//) {
+      # Take last n, so we need a line queue
+      my @q;
+      my $i = 0;
+      $q[$i++ % $_[0]] = $_ while <>;
+      print for @q[$i % $_[0] .. $#q];
+      print for @q[0 .. $i % $_[0] - 1];
+    } else {
+      my $n = $_[0] // 1;
+      while (<>) {
+        last if --$n < 0;
+        print;
+      }
     }
   },
 
@@ -606,6 +617,26 @@ my %functions = (
     close $fh;
   },
 
+  partition => sub {
+    my ($splitter, $cmd) = @_;
+    my %fhs;
+    $splitter =~ s/%(\d+)/\$_[$1]/g;
+    my $f = eval "sub {\n" . $splitter . "\n}" or
+            die "failed to compile splitter function: $@\n"
+              . "  (code was $splitter)";
+
+    while (<>) {
+      my $line = $_;
+      my $p    = $f->(split /\t/, $line);
+      unless (exists $fhs{$p}) {
+        my $cmdsub = $cmd =~ s/\{\}/$p/gr;
+        open $fhs{$p}, "| $cmdsub" or die "failed to launch $cmdsub: $!";
+      }
+      $fhs{$p}->print($line);
+    }
+    close for values %fhs;
+  },
+
   sd => sub {
     my $sx    = 0;
     my $sx2   = 0;
@@ -672,7 +703,7 @@ my %functions = (
 
 sub explode {
   return $_ unless s/^-([^-])/$1/;
-  map {$explosions{$_} // $_} grep length, split /([.\d]*),?/;
+  map {$explosions{$_} // $_} grep length, split /([-+.\d]*),?/;
 }
 
 # Print usage if the user clearly doesn't know what they're doing.
@@ -681,7 +712,7 @@ if (!@ARGV || $ARGV[0] =~ /^-[h?]$/
   print STDERR "usage: nfu [--use a.pl --use b.pl ...] [-v|--verbose] [files...] commands...\n";
   print STDERR "where each command is one of the following:\n\n";
 
-  my $len = 3 + max map length, keys %usages;
+  my $len = 1 + max map length, keys %usages;
   my %short_lookup;
   $short_lookup{$explosions{$_} =~ s/^--//r} = $_ for keys %explosions;
 
@@ -691,7 +722,8 @@ if (!@ARGV || $ARGV[0] =~ /^-[h?]$/
     printf STDERR "  %s--%-${len}s %s\n",
                   $short,
                   $cmd,
-                  $usages{$cmd} ? "<$usages{$cmd}>" : '';
+                  $usages{$cmd} ? $arity{$cmd} ? "<$usages{$cmd}>"
+                                               : "-- $usages{$cmd}" : '';
   }
   print STDERR "\n";
   print STDERR "see https://github.com/spencertipping/nfu for documentation\n";

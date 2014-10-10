@@ -195,7 +195,8 @@ order matters; `nfu -sc` and `nfu -cs` do two completely different things.
 - `-s`, `--sum`: Takes a running total of the given numbers.
 - `-S`, `--sample`: Takes a probability and returns each record randomly with
   that probability.
-- `-T`, `--take`: Takes the first N records, discarding the rest.
+- `-T`, `--take`: Takes the first N records, discarding the rest. If N is
+  prefixed with `+`, then takes the last N records.
 - `-V`, `--variance`: Running variance of the first column.
 - `-v`, `--verbose`: Measures data throughput interactively on stderr, emitting
   it untransformed. This can be used anywhere in your pipeline, though
@@ -209,6 +210,10 @@ order matters; `nfu -sc` and `nfu -cs` do two completely different things.
 - `--into`: Duplicates the current stream, both to stdout and to the stdin of
   the shell command. Any stdout from the command will be interleaved into the
   current stream. (Using `> /dev/null` will prevent this.)
+- `--partition`: Takes a partition ID function and a shell command, and begins
+  partitioning rows by the output of the partition ID function. Each partition
+  is sent to the stdin of an instance of the shell command, where the string
+  `{}` is replaced by the partition ID.
 - `--sd`: Running standard deviation of the first column.
 - `--bits`: Takes the total of a list of numbers, and returns the number of
   bits required to arithmetic-encode any given row, given that the row's
