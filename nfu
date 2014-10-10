@@ -481,7 +481,7 @@ my %functions = (
     my $i = 0;
 
     for (1 .. $ENV{NFU_PMAP_PARALLELISM} // 16) {
-      my $mapper = quote_self '--map', $_[0];
+      my $mapper = quote_self @uses, '--map', $_[0];
       open my $fh, "| $mapper"
       or die "failed to open child process $mapper: $!";
       push @fhs, $fh;
@@ -767,9 +767,12 @@ if ($ARGV[0] eq '--quote') {
 }
 
 # Load 'use' modules before any forking.
+my @uses;
 while (@ARGV and $ARGV[0] =~ /^--(use|run)$/) {
   my $option = shift @ARGV;
   my $x      = shift @ARGV;
+
+  push @uses, $option, $x;
   if ($option eq '--run') {
     eval $x;
     die "failed to run $x: $@" if $@;
