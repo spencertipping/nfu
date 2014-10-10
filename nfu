@@ -43,6 +43,8 @@ sub frequencies {
 
 sub mean {scalar @_ && sum(@_) / @_}
 
+sub quote_self {join ' ', $0, map {"'" . s/'/'\\''/gr . "'"} @_}
+
 binmode STDOUT, ':utf8';
 
 my %explosions = (
@@ -65,6 +67,7 @@ my %explosions = (
   l => '--log',
   L => '--exp',
   m => '--map',
+  M => '--pmap',
   n => '--number',
   o => '--order',
   O => '--rorder',
@@ -101,6 +104,7 @@ my %arity = (
   log        => 0,
   exp        => 0,
   map        => 1,
+  pmap       => 1,
   number     => 0,
   order      => 0,
   rorder     => 0,
@@ -147,6 +151,7 @@ my %usages = (
   log        => 'log base e of each value',
   exp        => 'e^x for each value',
   map        => 'row map fn',
+  pmap       => 'row map fn (executed multiple times in parallel)',
   number     => 'prepends line number to each line',
   order      => 'sorts ascending by general numeric value',
   rorder     => 'sorts descending by general numeric value',
@@ -471,6 +476,21 @@ my %functions = (
     }
   },
 
+  pmap => sub {
+    my @fhs;
+    my $i = 0;
+
+    for (1 .. $ENV{NFU_PMAP_PARALLELISM} // 16) {
+      my $mapper = quote_self '--map', $_[0];
+      open my $fh, "| $mapper"
+      or die "failed to open child process $mapper: $!";
+      push @fhs, $fh;
+    }
+
+    $fhs[$i++]->print($_) while <>;
+    close for @fhs;
+  },
+
   reduce => sub {
     (my $code = $_[1]) =~ s/%(\d+)/\$_[$1]/g;
     my $f = eval "sub {\n" . $code . "\n}" or
@@ -742,7 +762,7 @@ if (!@ARGV || $ARGV[0] =~ /^-[h?]$/
 if ($ARGV[0] eq '--quote') {
   # Quote all other arguments so a shell will parse them correctly.
   shift @ARGV;
-  print join(' ', $0, map {"'" . s/'/'\\''/gr . "'"} @ARGV), "\n";
+  print quote_self(@ARGV), "\n";
   exit 0;
 }
 
