@@ -482,16 +482,25 @@ my %functions = (
 
   pmap => sub {
     my @fhs;
-    my $i = 0;
+    my $wbits = '';
+    my $wout  = '';
+    my $i     = 0;
 
     for (1 .. $ENV{NFU_PMAP_PARALLELISM} // 16) {
       my $mapper = quote_self @uses, '--map', $_[0];
       open my $fh, "| $mapper"
       or die "failed to open child process $mapper: $!";
+
+      vec($wbits, fileno($fh), 1) = 1;
       push @fhs, $fh;
     }
 
-    $fhs[$i++ % @fhs]->print($_) while <>;
+    while (<>) {
+      my $line = $_;
+      select undef, $wout = $wbits, undef, undef;
+      ++$i until vec($wout, fileno $fhs[$i % @fhs], 1);
+      syswrite $fhs[$i++ % @fhs], $line;
+    }
     close for @fhs;
   },
 
