@@ -754,7 +754,7 @@ while (@ARGV and $ARGV[0] =~ /^--(use|run)$/) {
     eval $x;
     die "failed to run $x: $@" if $@;
   } else {
-    do shift @ARGV;
+    do $x;
     die "failed to use $x: $@" if $@;
   }
 }
