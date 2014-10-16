@@ -133,6 +133,7 @@ my %arity = (
   splot      => 1,
   sd         => 0,
   bits       => 1,
+  mplot      => 1,
 );
 
 my %usages = (
@@ -179,12 +180,15 @@ my %usages = (
   splot      => 'gnuplot arguments',
   sd         => 'running standard deviation',
   bits       => 'column total',
+  mplot      => 'gnuplot arguments per column, separated by ;',
 );
 
 my %gnuplot_aliases = (
-  '%l' => 'with lines',
-  '%d' => 'with dots',
-  '%i' => 'with impulses',
+  '%l' => ' with lines',
+  '%d' => ' with dots',
+  '%i' => ' with impulses',
+  '%u' => ' using ',
+  '%t' => ' title ',
 );
 
 sub expand_gnuplot_options {
@@ -388,6 +392,18 @@ my %functions = (
                     '-e',
                     'splot "-" ' . join(' ', expand_gnuplot_options @_),
                     '-persist';
+  },
+
+  mplot => sub {
+    my @gnuplot_options = split /;/, join ' ', expand_gnuplot_options @_;
+    my $fname = tmpnam;
+    open my $fh, '>', $fname or die "failed to open tempfile for mplot: $!";
+    $fh->print($_) while <>;
+    close $fh;
+    system 'gnuplot', '-e',
+           'plot ' . join(',', map("\"$fname\" $_", @gnuplot_options)),
+           '-persist';
+    unlink $fname or warn "failed to unlink mplot tempfile $fname: $!";
   },
 
   poll => sub {
@@ -765,6 +781,11 @@ if (!@ARGV || $ARGV[0] =~ /^-[h?]$/
                   $usages{$cmd} ? $arity{$cmd} ? "<$usages{$cmd}>"
                                                : "-- $usages{$cmd}" : '';
   }
+
+  print STDERR "\ngnuplot expansions:\n\n";
+  printf STDERR "  %2s -> '%s'\n", $_, $gnuplot_aliases{$_}
+  for sort keys %gnuplot_aliases;
+
   print STDERR "\n";
   print STDERR "see https://github.com/spencertipping/nfu for documentation\n";
   print STDERR "\n";
