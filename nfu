@@ -49,8 +49,6 @@ my @uses;
 
 sub quote_self {join ' ', $0, map {"'" . s/'/'\\''/gr . "'"} @_}
 
-binmode STDOUT, ':utf8';
-
 my %explosions = (
   a => '--average',
   A => '--aggregate',

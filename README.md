@@ -224,3 +224,8 @@ order matters; `nfu -sc` and `nfu -cs` do two completely different things.
   above).
 - `--slice`: Takes two numbers: #lines to chop from head, #lines to chop from
   tail.
+
+## Stuff I plan to fix sometime
+- `--verbose` should use a simple, coordinated thing written in Perl. No reason
+  to shell out for something this straightforward (and we could probably get it
+  to do the right thing when decompressing files, too).
