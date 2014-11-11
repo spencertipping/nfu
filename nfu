@@ -750,29 +750,31 @@ if ($ARGV[0] eq '--quote') {
   exit 0;
 }
 
-# Load 'use' modules before any forking.
-while (@ARGV and $ARGV[0] =~ /^--(use|run)$/) {
-  my $option = shift @ARGV;
-  my $x      = shift @ARGV;
+my @exploded;
+while (@ARGV) {
+  # Load 'use' modules before any forking.
+  if (@ARGV and $ARGV[0] =~ /^--(use|run)$/) {
+    my $option = shift @ARGV;
+    my $x      = shift @ARGV;
 
-  push @uses, $option, $x;
-  if ($option eq '--run') {
-    eval $x;
-    die "failed to run $x: $@" if $@;
+    push @uses, $option, $x;
+    if ($option eq '--run') {
+      eval $x;
+      die "failed to run $x: $@" if $@;
+    } else {
+      do $x;
+      die "failed to use $x: $@" if $@;
+    }
+  } elsif (@ARGV && $ARGV[0] =~ /^--?v(erbose)?$/) {
+    shift @ARGV;
+    $verbose = 1;
   } else {
-    do $x;
-    die "failed to use $x: $@" if $@;
+    push @exploded, explode shift @ARGV;
   }
 }
 
-if (@ARGV && $ARGV[0] =~ /^--?v(erbose)?$/) {
-  shift @ARGV;
-  $verbose = 1;
-}
-
-my $reader   = undef;
-my @exploded = map explode, @ARGV;
-my @parsed   = ();
+my $reader = undef;
+my @parsed = ();
 
 @ARGV = ();
 
