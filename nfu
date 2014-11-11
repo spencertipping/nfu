@@ -139,7 +139,6 @@ my %explosions = (
   s => '--sum',
   S => '--sample',
   T => '--take',
-  v => '--verbose',
   V => '--variance',
   w => '--with',
 );
