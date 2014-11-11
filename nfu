@@ -250,7 +250,7 @@ sub expand_eval_shorthands {
   $_[0] =~ s/%(\d+)/\$_[$1]/gr
         =~ s/%je/json_encode/gr
         =~ s/%jd/json_decode/gr
-        =~ s/\.([-_\w?\$]+)/->{'$1'}/gr;
+        =~ s/\.([\$_a-zA-Z][-_\w?\$]*)/->{'$1'}/gr;
 }
 
 sub compile_eval_into_function {
