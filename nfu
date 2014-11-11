@@ -772,6 +772,7 @@ while (@ARGV) {
     }
   } elsif (!$verbose && $ARGV[0] =~ /^--?v(erbose)?$/) {
     shift @ARGV;
+    print STDERR "\033[2J";
     $verbose = 1;
   } else {
     push @exploded, explode shift @ARGV;
