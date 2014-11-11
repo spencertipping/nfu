@@ -60,6 +60,22 @@ if (require JSON) {
 sub json_encode {$json->encode(@_)}
 sub json_decode {$json->decode(@_)}
 
+sub je {json_encode @_}
+sub jd {json_decode @_}
+
+# File functions
+sub read_file {
+  open my $fh, '<', $_[0];
+  join '', <$fh>;
+}
+
+sub read_lines {
+  open my $fh, '<', $_[0];
+  my @result;
+  chomp, push @result, $_ for <$fh>;
+  @result;
+}
+
 # Flags
 our $verbose    = 0;
 our $n_lines    = 0;
@@ -248,8 +264,6 @@ sub expand_gnuplot_options {
 
 sub expand_eval_shorthands {
   $_[0] =~ s/%(\d+)/\$_[$1]/gr
-        =~ s/%je/json_encode/gr
-        =~ s/%jd/json_decode/gr
         =~ s/\.([\$_a-zA-Z][-_\w?\$]*)/->{'$1'}/gr;
 }
 
