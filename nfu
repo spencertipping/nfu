@@ -267,7 +267,7 @@ sub stateless_unary_fn {
       chomp;
       my @fs = split /\t/;
       $fs[$_] = $f->($fs[$_], @_) for @columns;
-      print row("\t", @fs), "\n";
+      print row(@fs), "\n";
     }
   };
 }
@@ -283,7 +283,7 @@ sub stateful_unary_fn {
       chomp;
       my @fs = split /\t/;
       $fs[$_] = $f->($fs[$_], $states{$_}, @_) for @columns;
-      print row("\t", @fs), "\n";
+      print row(@fs), "\n";
     }
   };
 }
@@ -311,7 +311,7 @@ sub sort_options {
   return '-S', $ENV{NFU_SORT_BUFFER} || '256M',
          '--parallel=' . ($ENV{NFU_SORT_PARALLEL} || 4),
          (defined $column
-           ? ("--field-separator=\t", '-k', $column + 1)
+           ? ('-t', "\t", '-k', $column + 1)
            : ()),
          ($ENV{NFU_SORT_COMPRESS}
            ? ("--compress-program=$ENV{NFU_SORT_COMPRESS}")
