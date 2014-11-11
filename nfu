@@ -745,6 +745,11 @@ if ($ARGV[0] eq '--quote') {
   exit 0;
 }
 
+sub explode {
+  return $_[0] unless $_[0] =~ s/^-([^-])/$1/;
+  map {$explosions{$_} // $_} grep length, split /([-+.\d]*),?/, $_[0];
+}
+
 my @exploded;
 while (@ARGV) {
   # Load 'use' modules before any forking.
@@ -772,11 +777,6 @@ my $reader = undef;
 my @parsed = ();
 
 @ARGV = ();
-
-sub explode {
-  return $_[0] unless $_[0] =~ s/^-([^-])/$1/;
-  map {$explosions{$_} // $_} grep length, split /([-+.\d]*),?/, $_[0];
-}
 
 # First parse through all of the options, pull out stray files, and replace
 # @ARGV. This enables <> in the worker subs. (The "right way" to do this would
