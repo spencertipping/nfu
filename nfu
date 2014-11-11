@@ -701,11 +701,6 @@ my %functions = (
   },
 );
 
-sub explode {
-  return $_ unless s/^-([^-])/$1/;
-  map {$explosions{$_} // $_} grep length, split /([-+.\d]*),?/;
-}
-
 # Print usage if the user clearly doesn't know what they're doing.
 if (!@ARGV || $ARGV[0] =~ /^-[h?]$/
            || $ARGV[0] =~ /^--(usage|help)$/) {
@@ -753,7 +748,7 @@ if ($ARGV[0] eq '--quote') {
 my @exploded;
 while (@ARGV) {
   # Load 'use' modules before any forking.
-  if (@ARGV and $ARGV[0] =~ /^--(use|run)$/) {
+  if ($ARGV[0] =~ /^--(use|run)$/) {
     my $option = shift @ARGV;
     my $x      = shift @ARGV;
 
@@ -765,7 +760,7 @@ while (@ARGV) {
       do $x;
       die "failed to use $x: $@" if $@;
     }
-  } elsif (@ARGV && $ARGV[0] =~ /^--?v(erbose)?$/) {
+  } elsif (!$verbose && $ARGV[0] =~ /^--?v(erbose)?$/) {
     shift @ARGV;
     $verbose = 1;
   } else {
@@ -777,6 +772,11 @@ my $reader = undef;
 my @parsed = ();
 
 @ARGV = ();
+
+sub explode {
+  return $_[0] unless $_[0] =~ s/^-([^-])/$1/;
+  map {$explosions{$_} // $_} grep length, split /([-+.\d]*),?/, $_[0];
+}
 
 # First parse through all of the options, pull out stray files, and replace
 # @ARGV. This enables <> in the worker subs. (The "right way" to do this would
