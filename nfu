@@ -307,10 +307,15 @@ sub exec_with_diamond {
 }
 
 sub sort_options {
-  '-S', $ENV{NFU_SORT_BUFFER} || '256M',
-  '--parallel=' . ($ENV{NFU_SORT_PARALLEL} || 4),
-  ($ENV{NFU_SORT_COMPRESS} ? ("--compress-program=$ENV{NFU_SORT_COMPRESS}")
-                           : ())
+  my ($column) = @_;
+  return '-S', $ENV{NFU_SORT_BUFFER} || '256M',
+         '--parallel=' . ($ENV{NFU_SORT_PARALLEL} || 4),
+         (defined $column
+           ? ("--field-separator=\t", '-k', $column + 1)
+           : ()),
+         ($ENV{NFU_SORT_COMPRESS}
+           ? ("--compress-program=$ENV{NFU_SORT_COMPRESS}")
+           : ());
 }
 
 sub sort_cmd {join ' ', 'sort', sort_options, @_}
@@ -328,10 +333,10 @@ sub fifo_for {
 }
 
 my %functions = (
-  group  => sub {exec_with_diamond 'sort', sort_options},
-  rgroup => sub {exec_with_diamond 'sort', '-r', sort_options},
-  order  => sub {exec_with_diamond 'sort', '-g', sort_options},
-  rorder => sub {exec_with_diamond 'sort', '-rg', sort_options},
+  group  => sub {exec_with_diamond 'sort', sort_options @_},
+  rgroup => sub {exec_with_diamond 'sort', '-r', sort_options @_},
+  order  => sub {exec_with_diamond 'sort', '-g', sort_options @_},
+  rorder => sub {exec_with_diamond 'sort', '-rg', sort_options @_},
 
   count => sub {
     # Same behavior as uniq -c, but delimits counts with \t
