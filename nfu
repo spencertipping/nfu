@@ -765,7 +765,7 @@ while (@ARGV and $ARGV[0] =~ /^--(use|run)$/) {
   }
 }
 
-if (@ARGV && $ARGV[0] =~ /^--?v(erbose)?/) {
+if (@ARGV && $ARGV[0] =~ /^--?v(erbose)?$/) {
   shift @ARGV;
   $verbose = 1;
 }
