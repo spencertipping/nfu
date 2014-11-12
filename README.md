@@ -46,7 +46,7 @@ $ nfu /usr/share/dict/words -gc
 ```
 
 ## Numeric commands
-```
+```sh
 $ seq 100 | nfu -s              # --sum, running total
 $ seq 100 | nfu -S              # --delta
 $ seq 100 | nfu -a              # --average
@@ -56,8 +56,22 @@ $ seq 100 | nfu -L              # --exp, inverse of --log
 $ seq 100 | nfu -q0,0.1         # --quant, quantize each number to 0.1
 ```
 
-## Row transformation
+These commands are each single-column by default, but you can apply them to one
+or more columns by specifying a string of digits:
+
+```sh
+$ seq 100 | nfu -s0             # sum column 0
+$ seq 100 \
+  | perl -ne 'print "$_\t$_\n"' \
+  | nfu -s01                    # sum columns 0 and 1 independently
 ```
+
+## Row transformation
+These commands take Perl expressions that are rewritten to expand some
+shorthands. You can use `nfu --expand-code 'command'` to see how the code is
+transformed. Columns of input, always split by `/\t/`, are stored in `@_`.
+
+```sh
 $ seq 100 | nfu -m '%0 * %0'    # --map; %0 is expanded to $_[0]
 $ seq 100 | nfu -k '%0 =~ /0$/' # --keep
 $ seq 100 | nfu -K '%0 =~ /0$/' # --remove
