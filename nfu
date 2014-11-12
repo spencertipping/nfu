@@ -401,7 +401,7 @@ my %functions = (
     my @columns = split //, shift // '';
     my $last;
     my @last;
-    my $count = 0;
+    my $count = -1;
 
     while (<>) {
       be_verbose_as_appropriate length;
@@ -409,18 +409,20 @@ my %functions = (
 
       my @xs = split /\t/;
       @xs   = @xs[@columns] if @columns;
-      $last = $_, @last = @xs unless $count++;
+      $last = $_, @last = @xs unless ++$count;
 
       for (my $i = 0; $i < @xs; ++$i) {
         if ($xs[$i] ne $last[$i]) {
           print "$count\t$last\n";
           $count = 0;
-          @last  = ();
+          @last  = @xs;
+          $last  = $_;
           last;
         }
       }
     }
 
+    ++$count;
     print "$count\t$last\n";
   },
 
