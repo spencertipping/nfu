@@ -154,7 +154,8 @@ END {
 # arguments. This is required for --pmap to work correctly.
 my @uses;
 
-sub quote_self {join ' ', $0, map {"'" . s/'/'\\''/gr . "'"} @_}
+sub quote_self {join ' ', $0,
+                map {/[^-\w]/ ? "'" . s/'/'\\''/gr . "'" : $_} @_}
 
 my %explosions = (
   a => '--average',
