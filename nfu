@@ -6,9 +6,6 @@ use v5.14;
 use strict;
 use warnings;
 
-use feature 'switch';
-no warnings 'experimental';
-
 use Time::HiRes qw/time/;
 use POSIX       qw/dup2 mkfifo :sys_wait_h/;
 use File::Temp  qw/tmpnam/;
@@ -835,15 +832,15 @@ if ($ARGV[0] eq '--quote') {
 
 if ($ARGV[0] =~ /^--expand/) {
   my ($command, $x, @others) = @ARGV;
-  given ($command) {
-    print expand_filename_shorthands($x)
-          // '<invalid/nonexistent>',     "\n" when /-pseudofile$/;
-    print expand_eval_shorthands($x),     "\n" when /-code$/;
-    print expand_gnuplot_options($x),     "\n" when /-gnuplot$/;
-    default {
-      print STDERR "unknown command: $command\n";
-      exit 1;
-    }
+  if ($command =~ /-pseudofile$/) {
+    print expand_filename_shorthands($x) // '<invalid/nonexistent>', "\n";
+  } elsif ($command =~ /-code$/) {
+    print expand_eval_shorthands($x), "\n";
+  } elsif ($command =~ /-gnuplot$/) {
+    print expand_gnuplot_options($x), "\n";
+  } else {
+    print STDERR "unknown command: $command\n";
+    exit 1;
   }
   exit 0;
 }
