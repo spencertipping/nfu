@@ -2,11 +2,18 @@
 # nfu: Command-line numeric fu | Spencer Tipping
 # Licensed under the terms of the MIT source code license
 
-use v5.10;
+use v5.14;
 use strict;
 use warnings;
-use POSIX qw(dup2 mkfifo :sys_wait_h);
-use File::Temp qw(tmpnam);
+
+use feature 'switch';
+no warnings 'experimental';
+
+use Time::HiRes qw/time/;
+use POSIX       qw/dup2 mkfifo :sys_wait_h/;
+use File::Temp  qw/tmpnam/;
+
+use constant VERBOSE_INTERVAL => 30;
 
 ++$|;
 
@@ -43,6 +50,109 @@ sub frequencies {
 
 sub mean {scalar @_ && sum(@_) / @_}
 
+# JSON support (if available)
+our $json;
+if (require JSON) {
+  JSON->import;
+  no warnings qw(uninitialized);
+  $json = JSON->new->allow_nonref->utf8(1);
+} else {
+  print STDERR "note: no JSON support detected (try 'cpan install JSON')\n";
+}
+
+# These are callable from evaled code
+sub json_encode {$json->encode(@_)}
+sub json_decode {$json->decode(@_)}
+
+sub je {json_encode @_}
+sub jd {json_decode @_}
+
+# File functions
+sub expand_filename_shorthands {
+  my ($f, $always_make_a_command) = @_;
+  my $result;
+  if (-e $f) {
+    # It's really a filename, so push it onto @ARGV. If it's compressed, run it
+    # through the appropriate decompressor first.
+    my $piped = $f =~ s/^(.*\.gz)/cat '$1' | gzip -d/ri
+                   =~ s/^(.*\.bz2)/cat '$1' | bzip -d/ri
+                   =~ s/^(.*\.xz)/cat '$1' | xz -d/ri
+                   =~ s/^(.*\.lzo)/cat '$1' | lzop -d/ri;
+    $result = $piped =~ /\|/ ? "$piped |" : $piped;
+  } elsif ($f =~ s/^(?:http(s?):)?\/\//"http" . ($1 || '') . ":\/\/"/e) {
+    # Assume a URL and curl it
+    $result = "curl $f |";
+  } elsif ($f =~ s/^sh://) {
+    # Execute a command and capture stdout
+    $result = "$f |";
+  } elsif ($f =~ /(\w*@?[^:]+):(.*)$/) {
+    # Access file over SSH
+    $result = "ssh -C '$1' cat '$2' |";
+  } else {
+    return undef;
+  }
+
+  $always_make_a_command && $result !~ /\|/ ? "cat '$result' |"
+                                            : $result;
+}
+
+sub read_file {
+  open my $fh, '<', $_[0];
+  join '', <$fh>;
+}
+
+sub read_lines {
+  open my $fh, '<', $_[0];
+  my @result;
+  chomp, push @result, $_ for <$fh>;
+  @result;
+}
+
+# Flags
+our $verbose    = 0;
+our $n_lines    = 0;
+our $n_bytes    = 0;
+our $start_time = undef;
+
+our $verbose_command;
+our @verbose_args;
+our $verbose_command_formatted = undef;
+
+our $last_verbose_report = 0;
+our $verbose_row         = 0;
+
+# Call it like this:
+# while (<>) {
+#   be_verbose_as_appropriate length;
+#   ...
+# }
+sub be_verbose_as_appropriate {
+  return unless $verbose;
+  my ($record_length) = @_;
+  $n_lines += !!$record_length;
+  $n_bytes += $record_length;
+  my $now = time;
+  return unless $record_length == 0
+             || ($now - $last_verbose_report) * 1000 > VERBOSE_INTERVAL;
+
+  $last_verbose_report = $now;
+  $verbose_command_formatted //= join ' ', $verbose_command, @verbose_args;
+  $start_time //= $now;
+  my $runtime = $now - $start_time || 1;
+  printf STDERR "\033[%d;1H\033[K%10dl %8.1fl/s %10dk %8.1fkB/s  %s",
+                $verbose_row,
+                $n_lines,
+                $n_lines / $runtime,
+                $n_bytes / 1024,
+                $n_bytes / 1024 / $runtime,
+                $verbose_command_formatted;
+}
+
+END {
+  be_verbose_as_appropriate 0;
+  print STDERR "\n" if $verbose;
+}
+
 # This variable will keep track of any state accumulated from --use or --run
 # arguments. This is required for --pmap to work correctly.
 my @uses;
@@ -53,9 +163,7 @@ my %explosions = (
   a => '--average',
   A => '--aggregate',
   c => '--count',
-  d => '--delta',
   D => '--drop',
-  e => '--eval',
   E => '--every',
   f => '--fields',
   F => '--fieldsplit',
@@ -63,9 +171,8 @@ my %explosions = (
   G => '--rgroup',
   i => '--index',
   I => '--indexouter',
-  j => '--json',
-  J => '--jsonflat',
   k => '--keep',
+  K => '--remove',
   l => '--log',
   L => '--exp',
   m => '--map',
@@ -76,32 +183,28 @@ my %explosions = (
   p => '--plot',
   P => '--poll',
   q => '--quant',
-  r => '--reduce',
-  R => '--remove',
   s => '--sum',
-  S => '--sample',
+  S => '--delta',
   T => '--take',
-  v => '--verbose',
   V => '--variance',
   w => '--with',
 );
 
+# Minimum number of required arguments for each function. Numeric arguments are
+# automatically forwarded, so are always optional.
 my %arity = (
-  average    => 1,
+  average    => 0,
   aggregate  => 1,
   count      => 0,
   delta      => 0,
-  drop       => 1,
-  eval       => 1,
-  every      => 1,
-  fields     => 1,
+  drop       => 0,
+  every      => 0,
+  fields     => 0,
   fieldsplit => 1,
   group      => 0,
   rgroup     => 0,
   index      => 2,
   indexouter => 2,
-  json       => 1,
-  jsonflat   => 1,
   keep       => 1,
   log        => 0,
   exp        => 0,
@@ -113,25 +216,23 @@ my %arity = (
   plot       => 1,
   poll       => 2,
   sum        => 0,
-  slice      => 2,
-  quant      => 1,
-  reduce     => 2,
+  quant      => 0,
   remove     => 1,
-  sample     => 1,
-  take       => 1,
+  sample     => 0,
+  take       => 0,
   variance   => 0,
-  verbose    => 0,
   with       => 1,
 
   # Commands with no shorthands
   append     => 1,
   prepend    => 1,
   into       => 1,
+  duplicate  => 2,
   partition  => 2,
   splot      => 1,
   sd         => 0,
-  bits       => 1,
   mplot      => 1,
+  preview    => 0,
 );
 
 my %usages = (
@@ -140,16 +241,13 @@ my %usages = (
   count      => 'counts by first column value; like uniq -c',
   delta      => 'value -> difference from last value',
   drop       => 'number of records to drop',
-  eval       => 'row fn',
   every      => 'n (returns every nth row)',
   fields     => 'string of digits, each a zero-indexed column selector',
   fieldsplit => 'regexp to use for splitting',
   group      => 'sorts ascending',
   rgroup     => 'sorts descending',
-  index      => 'field index, command whose output to join against',
-  indexouter => 'field index, command whose output to join against',
-  json       => 'json transformer fn',
-  jsonflat   => 'json transformer fn',
+  index      => 'field index, pseudofile to join against',
+  indexouter => 'field index, pseudofile to join against',
   keep       => 'row filter fn',
   log        => 'log base e of each value',
   exp        => 'e^x for each value',
@@ -161,24 +259,22 @@ my %usages = (
   plot       => 'gnuplot arguments',
   poll       => 'interval in seconds, command whose output to collect',
   sum        => 'value -> total += value',
-  slice      => '#records to trim from start, #records to trim from end',
   quant      => 'number to round to',
-  reduce     => 'initial value, reducer fn',
   remove     => 'inverted row filter fn',
   sample     => 'row selection probability in [0, 1]',
   take       => 'n to take first n, +n to take last n',
   variance   => 'running variance',
-  verbose    => 'tracks data throughput at a point in the pipeline',
   with       => 'command whose output to join column-wise onto input',
 
   append     => 'shell command; appends its output to current stream',
   prepend    => 'shell command; prepends its output to current stream',
   into       => 'shell command; copies stream into stdin of that command',
+  duplicate  => 'two shell commands as separate arguments',
   partition  => 'partition id fn, shell command (where {} is partition ID)',
   splot      => 'gnuplot arguments',
   sd         => 'running standard deviation',
-  bits       => 'column total',
   mplot      => 'gnuplot arguments per column, separated by ;',
+  preview    => '',
 );
 
 my %gnuplot_aliases = (
@@ -198,9 +294,51 @@ sub expand_gnuplot_options {
   @transformed_opts;
 }
 
+sub expand_eval_shorthands {
+  $_[0] =~ s/%(\d+)/\$_[$1]/gr
+        =~ s/\.([\$_a-zA-Z][-_\w?\$]*)/->{'$1'}/gr;
+}
+
+sub compile_eval_into_function {
+  my ($code, $name) = @_;
+  $code = expand_eval_shorthands $code;
+  eval "sub {\n$code\n}"
+    or die "failed to compile $name function: $@\n  (code was $code)";
+}
+
+sub stateless_unary_fn {
+  my ($f) = @_;
+  sub {
+    my @columns = split //, shift // '0';
+    while (<>) {
+      be_verbose_as_appropriate length;
+      chomp;
+      my @fs = split /\t/;
+      $fs[$_] = $f->($fs[$_], @_) for @columns;
+      print row(@fs), "\n";
+    }
+  };
+}
+
+sub stateful_unary_fn {
+  my ($setup, $f) = @_;
+  sub {
+    my @columns = split //, shift // '0';
+    my %states;
+    $states{$_} = $setup->(@_) for @columns;
+    while (<>) {
+      be_verbose_as_appropriate length;
+      chomp;
+      my @fs = split /\t/;
+      $fs[$_] = $f->($fs[$_], $states{$_}, @_) for @columns;
+      print row(@fs), "\n";
+    }
+  };
+}
+
 sub exec_with_stdin {
   open(my $fh, '|' . join(' ', map {"'$_'"} @_)) or die "failed to exec @_";
-  print $fh $_ while <>;
+  be_verbose_as_appropriate(length), print $fh $_ while <>;
   close $fh;
 }
 
@@ -217,74 +355,101 @@ sub exec_with_diamond {
 }
 
 sub sort_options {
-  '-S', $ENV{NFU_SORT_BUFFER} || '256M',
-  '--parallel=' . ($ENV{NFU_SORT_PARALLEL} || 4),
-  ($ENV{NFU_SORT_COMPRESS} ? ("--compress-program=$ENV{NFU_SORT_COMPRESS}")
-                           : ())
+  my ($column) = @_;
+  return '-S', $ENV{NFU_SORT_BUFFER} || '256M',
+         '--parallel=' . ($ENV{NFU_SORT_PARALLEL} || 4),
+         (defined $column
+           ? ('-t', "\t", '-k', $column + 1)
+           : ()),
+         ($ENV{NFU_SORT_COMPRESS}
+           ? ("--compress-program=$ENV{NFU_SORT_COMPRESS}")
+           : ());
 }
 
 sub sort_cmd {join ' ', 'sort', sort_options, @_}
 
 sub fifo_for {
-  my ($command) = @_;
+  my ($file, @transforms) = @_;
   my $fifo_name = tmpnam;
 
   mkfifo $fifo_name, 0700 or die "failed to create fifo: $!";
 
   return $fifo_name if fork;
-  system "$command > '$fifo_name'";
+
+  my $command = join '|', expand_filename_shorthands($file, 1), @transforms;
+  open my $into_fifo, '>', $fifo_name
+    or die "failed to open fifo $fifo_name for writing: $!";
+  open my $from_file, $command
+    or die "failed to open file/command $command for reading: $!";
+
+  be_verbose_as_appropriate(length), $into_fifo->print($_) while <$from_file>;
+  close $into_fifo;
+  close $from_file;
+
   unlink $fifo_name or warn "failed to unlink temporary fifo $fifo_name: $!";
   exit 0;
 }
 
 my %functions = (
-  group  => sub {exec_with_diamond 'sort', sort_options},
-  rgroup => sub {exec_with_diamond 'sort', '-r', sort_options},
-  order  => sub {exec_with_diamond 'sort', '-g', sort_options},
-  rorder => sub {exec_with_diamond 'sort', '-rg', sort_options},
+  group  => sub {exec_with_diamond 'sort', sort_options @_},
+  rgroup => sub {exec_with_diamond 'sort', '-r', sort_options @_},
+  order  => sub {exec_with_diamond 'sort', '-g', sort_options @_},
+  rorder => sub {exec_with_diamond 'sort', '-rg', sort_options @_},
 
   count => sub {
-    # Same behavior as uniq -c, but delimits counts with \t
-    chomp(my $last = <>);
-    my $count = 1;
+    # Same behavior as uniq -c, but delimits counts with \t; also takes an
+    # optional series of columns to uniq by, rather than using the whole row.
+    my @columns = split //, shift // '';
+    my $last;
+    my @last;
+    my $count = 0;
+
     while (<>) {
+      be_verbose_as_appropriate length;
       chomp;
-      if ($_ eq $last) {
-        ++$count;
-      } else {
-        print "$count\t$last\n";
-        $count = 1;
-        $last  = $_;
+
+      my @xs = split /\t/;
+      @xs   = @xs[@columns] if @columns;
+      $last = $_, @last = @xs unless $count++;
+
+      for (my $i = 0; $i < @xs; ++$i) {
+        if ($xs[$i] ne $last[$i]) {
+          print "$count\t$last\n";
+          $count = 0;
+          @last  = ();
+          last;
+        }
       }
     }
+
     print "$count\t$last\n";
   },
 
   index => sub {
     # Inner join by appending joined fields to the end.
-    my ($field_index, $join_cmd) = @_;
+    my ($field_index, $join_file) = @_;
     ++$field_index;
 
-    my $sorted_index = fifo_for $join_cmd . '|' . sort_cmd "-t '\t' -k1b,1";
+    my $sorted_index = fifo_for $join_file, sort_cmd "-t '\t' -k1b,1";
     my $command = sort_cmd "-t '\t' -k ${field_index}b,$field_index" .
                   "| join -t '\t' -1 $field_index - '$sorted_index'";
 
     open my $to_join, "| $command" or die "failed to exec $command: $!";
-    print $to_join $_ while <>;
+    be_verbose_as_appropriate(length), print $to_join $_ while <>;
     close $to_join;
   },
 
   indexouter => sub {
     # Outer left join by appending joined fields to the end.
-    my ($field_index, $join_cmd) = @_;
+    my ($field_index, $join_file) = @_;
     ++$field_index;
 
-    my $sorted_index = fifo_for $join_cmd . '|' . sort_cmd "-t '\t' -k 1b,1";
+    my $sorted_index = fifo_for $join_file, sort_cmd "-t '\t' -k 1b,1";
     my $command = sort_cmd "-t '\t' -k ${field_index}b,$field_index" .
                   "| join -a 1 -t '\t' -1 $field_index - '$sorted_index'";
 
     open my $to_join, "| $command" or die "failed to exec $command: $!";
-    print $to_join $_ while <>;
+    be_verbose_as_appropriate(length), print $to_join $_ while <>;
     close $to_join;
   },
 
@@ -294,6 +459,7 @@ my %functions = (
     open my $fh, "$command |" or die "failed to exec $command: $!";
     my ($part1, $part2);
     while (defined($part1 = <>) and defined($part2 = <$fh>)) {
+      be_verbose_as_appropriate length $part1 + length $part2;
       chomp $part1;
       chomp $part2;
       print "$part1\t$part2\n";
@@ -301,25 +467,26 @@ my %functions = (
     close $fh;
   },
 
-  average => sub {
-    my $size = $_[0] // 0;
-    my ($n, $total) = (0, 0);
-    my @window = ();
-    while (<>) {
-      chomp;
-      my ($x, @xs) = split /\t/;
-      print join("\t", ($total += $x) /
-                       (++$n > $size && $size ? $size : $n), @xs), "\n";
-      $total -= shift @window if $size and push(@window, $x) >= $size;
-    }
-  },
+  average => stateful_unary_fn(
+    sub {my ($size, $n, $total) = ($_[0] // 0, 0, 0);
+         [$size, $n, $total, []]},
+    sub {
+      my ($x, $state) = @_;
+      my ($size, $n, $total, $window) = @$state;
+      $total += $x;
+      ++$n;
+      my $v = $total / ($n > $size && $size ? $size : $n);
+      $total -= shift @$window if $size and push(@$window, $x) >= $size;
+      $$state[1] = $n;
+      $$state[2] = $total;
+      $v;
+    }),
 
   aggregate => sub {
-    (my $code = $_[0]) =~ s/%(\d+)/\$_[$1]/g;
-    my $f = eval "sub {\n" . $code . "\n}" or
-            die "failed to compile aggregate function: $@\n  (code was $code)";
+    my $f = compile_eval_into_function $_[0], 'aggregate function';
     my @columns;
     while (my $line = <>) {
+      be_verbose_as_appropriate length $line;
       chomp $line;
       my @fields = split /\t/, $line;
 
@@ -347,34 +514,15 @@ my %functions = (
     }
   },
 
-  slice => sub {
-    my ($chop_head, $chop_tail) = @_;
-    die "usage: --slice head tail, or -Shead,tail"
-      unless defined $chop_head and defined $chop_tail
-         and $chop_head =~ /^\d+$/ and $chop_tail =~ /^\d+$/;
-    my @window;
-    my $n = 0;
-    while (<>) {
-      push @window, $_ if ++$n > $chop_head;
-      print shift @window if @window > $chop_tail;
-    }
-  },
+  log => stateless_unary_fn(\&log),
+  exp => stateless_unary_fn(\&exp),
 
-  log => sub {
-    while (<>) {
-      chomp;
-      my ($x, @xs) = split /\t/;
-      print join("\t", log($x), @xs), "\n";
-    }
-  },
-
-  exp => sub {
-    while (<>) {
-      chomp;
-      my ($x, @xs) = split /\t/;
-      print join("\t", exp($x), @xs), "\n";
-    }
-  },
+  quant => stateless_unary_fn(sub {
+    my ($x, $quantum) = @_;
+    $quantum ||= 1.0;
+    my $sign = $x < 0 ? -1 : 1;
+    int(abs($x) / $quantum + 0.5) * $quantum * $sign;
+  }),
 
   # Note: this needs to be stdin; otherwise "nfu -p %l filename" will fail
   # (since exec_with_diamond trieds to pass filename straight into gnuplot).
@@ -411,35 +559,35 @@ my %functions = (
     system($command), sleep $sleep while 1;
   },
 
-  delta => sub {
-    my $last = 0;
-    while (<>) {
-      chomp;
-      my ($x, @xs) = split /\t/;
-      print join("\t", $x - $last, @xs), "\n";
-      $last = $x;
-    }
-  },
+  delta => stateful_unary_fn(
+    sub {[0]},
+    sub {my ($x, $state) = @_;
+         my $v = $x - $$state[0];
+         $$state[0] = $x;
+         $v}),
 
-  sum => sub {
-    my $total = 0;
-    while (<>) {
-      chomp;
-      my ($x, @xs) = split /\t/;
-      print join("\t", $total += $x, @xs), "\n";
-    }
-  },
+  sum => stateful_unary_fn(
+    sub {[0]},
+    sub {my ($x, $state) = @_;
+         $$state[0] += $x}),
 
-  quant => sub {
-    my $quantum = $_[0] || 1.0;
-    while (<>) {
-      chomp;
-      my ($x, @xs) = split /\t/;
-      my $sign = $x < 0 ? -1 : 1;
-      print join("\t", int(abs($x) / $quantum + 0.5) * $quantum * $sign, @xs),
-            "\n";
-    }
-  },
+  variance => stateful_unary_fn(
+    sub {[0, 0, 0]},
+    sub {my ($x, $state) = @_;
+         $$state[0] += $x;
+         $$state[1] += $x * $x;
+         $$state[2]++;
+         my ($sx, $sx2, $count) = @$state;
+         ($sx2 - ($sx * $sx / $count)) / $count}),
+
+  sd => stateful_unary_fn(
+    sub {[0, 0, 0]},
+    sub {my ($x, $state) = @_;
+         $$state[0] += $x;
+         $$state[1] += $x * $x;
+         $$state[2]++;
+         my ($sx, $sx2, $count) = @$state;
+         sqrt(($sx2 - ($sx * $sx / $count)) / $count)}),
 
   take => sub {
     if ($_[0] =~ s/^\+//) {
@@ -459,7 +607,10 @@ my %functions = (
   },
 
   sample => sub {
-    rand > $_[0] and print while <>;
+    while (<>) {
+      be_verbose_as_appropriate length;
+      print if rand() < $_[0];
+    }
   },
 
   drop => sub {
@@ -468,26 +619,10 @@ my %functions = (
     print while <>;
   },
 
-  eval => sub {
-    (my $code = $_[0]) =~ s/%(\d+)/\$_[$1]/g;
-    my $f = eval "sub {\n" . $code . "\n}" or
-            die "failed to compile eval function: $@\n  (code was $code)";
-    local $_ = '';
-    while (my $line = <>) {
-      chomp $line;
-      my @xs = split /\t/, $line;
-      my @ys = $f->(@xs);
-      print @ys > 1 ? join("\t", @ys)
-                    : join("\t", $ys[0], @xs[1 .. $#xs]), "\n" if @ys;
-    }
-  },
-
   map => sub {
-    (my $code = $_[0]) =~ s/%(\d+)/\$_[$1]/g;
-    my $f = eval "sub {\n" . $code . "\n}" or
-            die "failed to compile eval function: $@\n  (code was $code)";
-    local $_ = '';
+    my $f = compile_eval_into_function $_[0], 'map function';
     while (my $line = <>) {
+      be_verbose_as_appropriate length $line;
       chomp $line;
       my @xs = split /\t/, $line;
       print "$_\n" for $f->(@xs);
@@ -503,109 +638,38 @@ my %functions = (
     for (1 .. $ENV{NFU_PMAP_PARALLELISM} // 16) {
       my $mapper = quote_self @uses, '--map', $_[0];
       open my $fh, "| $mapper"
-      or die "failed to open child process $mapper: $!";
+        or die "failed to open child process $mapper: $!";
 
       vec($wbits, fileno($fh), 1) = 1;
       push @fhs, $fh;
     }
 
     while (<>) {
-      my $line = $_;
+      be_verbose_as_appropriate;
       select undef, $wout = $wbits, undef, undef;
       ++$i until vec($wout, fileno $fhs[$i % @fhs], 1);
-      syswrite $fhs[$i++ % @fhs], $line;
+      syswrite $fhs[$i++ % @fhs], $_;
     }
     close for @fhs;
   },
 
-  reduce => sub {
-    (my $code = $_[1]) =~ s/%(\d+)/\$_[$1]/g;
-    my $f = eval "sub {\n" . $code . "\n}" or
-            die "failed to compile eval function: $@\n  (code was $code)";
-    local $_ = $_[0];
-    while (my $line = <>) {
-      chomp $line;
-      my @xs = split /\t/, $line;
-      my @ys = $f->(@xs);
-      print @ys > 1 ? join("\t", @ys)
-                    : join("\t", $ys[0], @xs[1 .. $#xs]), "\n" if @ys;
-    }
-  },
-
   keep => sub {
-    (my $code = $_[0]) =~ s/%(\d+)/\$_[$1]/g;
-    my $f = eval "sub {\n" . $code . "\n}" or
-            die "failed to compile eval function: $@\n  (code was $code)";
-    local $_ = '';
+    my $f = compile_eval_into_function $_[0], 'keep function';
     while (my $line = <>) {
+      be_verbose_as_appropriate length $line;
       chomp $line;
       my @xs = split /\t/, $line;
-      print join("\t", @xs), "\n" if $f->(@xs);
+      print row(@xs), "\n" if $f->(@xs);
     }
   },
 
   remove => sub {
-    (my $code = $_[0]) =~ s/%(\d+)/\$_[$1]/g;
-    my $f = eval "sub {\n" . $code . "\n}" or
-            die "failed to compile eval function: $@\n  (code was $code)";
-    local $_ = '';
+    my $f = compile_eval_into_function $_[0], 'remove function';
     while (my $line = <>) {
+      be_verbose_as_appropriate length $line;
       chomp $line;
       my @xs = split /\t/, $line;
-      print join("\t", @xs), "\n" unless $f->(@xs);
-    }
-  },
-
-  json => sub {
-    require JSON or die 'nfu: unable to load JSON module';
-    JSON->import;
-
-    no warnings qw(uninitialized);
-
-    my $body = $_[0] =~ s/%(\d+)/\$_[$1]/gr
-                     =~ s/\.(\w+)/->{'$1'}/gr;
-
-    my $json = JSON->new->allow_nonref->utf8(1);
-    my $code = qq{sub {
-      local \$_ = \$json->decode(\$_[0]);
-      $body;
-    }};
-
-    my $f = eval $code
-            or die "failed to compile eval function: $@\n  (code was $code)";
-
-    while (<>) {
-      chomp;
-      my @xs = split /\t/;
-      my @ys = $f->(@xs);
-      print @ys > 1 ? join("\t", @ys)
-                    : join("\t", $json->encode($ys[0]), @xs[1 .. $#xs]), "\n"
-      if @ys;
-    }
-  },
-
-  jsonflat => sub {
-    require JSON or die 'nfu: unable to load JSON module';
-    JSON->import;
-
-    no warnings qw(uninitialized);
-
-    my $body = $_[0] =~ s/%(\d+)/\$_[$1]/gr
-                     =~ s/\.(\w+)/->{'$1'}/gr;
-
-    my $json = JSON->new->allow_nonref->utf8(1);
-    my $code = qq{sub {
-      local \$_ = \$json->decode(\$_[0]);
-      $body;
-    }};
-
-    my $f = eval $code
-            or die "failed to compile eval function: $@\n  (code was $code)";
-
-    while (<>) {
-      chomp;
-      my @xs = split /\t/;
-      print $_, "\n" for $f->(@xs);
+      print row(@xs), "\n" unless $f->(@xs);
     }
   },
 
@@ -613,36 +677,35 @@ my %functions = (
     my ($n) = @_;
     my $i = 0;
     while (<>) {
+      be_verbose_as_appropriate length;
       print unless $i++ % $n;
     }
   },
 
   fields => sub {
     my @fs = split //, $_[0];
-    chomp, print join("\t", map $_ // '', (split /\t/)[@fs]), "\n" while <>;
+    while (<>) {
+      be_verbose_as_appropriate length;
+      chomp;
+      print join("\t", map $_ // '', (split /\t/)[@fs]), "\n";
+    }
   },
 
   fieldsplit => sub {
     my $delim = qr/$_[0]/;
-    chomp, print join("\t", split /$delim/), "\n" while <>;
+    while (<>) {
+      be_verbose_as_appropriate length;
+      chomp;
+      print join("\t", split /$delim/), "\n";
+    }
   },
 
   number => sub {
     my $n = 0;
-    chomp, print row(++$n, split /\t/), "\n" while <>;
-  },
-
-  variance => sub {
-    my $sx    = 0;
-    my $sx2   = 0;
-    my $count = 0;
     while (<>) {
+      be_verbose_as_appropriate length;
       chomp;
-      my ($x, @xs) = split /\t/;
-      $sx  += $x;
-      $sx2 += $x * $x;
-      ++$count;
-      print join("\t", ($sx2 - ($sx * $sx / $count)) / $count, @xs), "\n";
+      print row(++$n, split /\t/), "\n";
     }
   },
 
@@ -657,71 +720,48 @@ my %functions = (
   },
 
   into => sub {
-    open my $fh, "| $_[0]";
+    open my $fh, "| $_[0]" or die "failed to launch $_[0]: $!";
     while (<>) {
+      be_verbose_as_appropriate length;
       $fh->print($_);
       print;
     }
     close $fh;
   },
 
+  duplicate => sub {
+    open my $fh1, "| $_[0]" or die "failed to launch $_[0]: $!";
+    open my $fh2, "| $_[1]" or die "failed to launch $_[1]: $!";
+    while (<>) {
+      be_verbose_as_appropriate length;
+      $fh1->print($_);
+      $fh2->print($_);
+    }
+    close $fh1;
+    close $fh2;
+  },
+
   partition => sub {
     my ($splitter, $cmd) = @_;
     my %fhs;
     $splitter =~ s/%(\d+)/\$_[$1]/g;
-    my $f = eval "sub {\n" . $splitter . "\n}" or
-            die "failed to compile splitter function: $@\n"
-              . "  (code was $splitter)";
+    my $f = compile_eval_into_function $splitter, 'partition function';
 
+    my @open_partitions;
     while (<>) {
+      be_verbose_as_appropriate length;
       my $line = $_;
       my $p    = $f->(split /\t/, $line);
       unless (exists $fhs{$p}) {
         my $cmdsub = $cmd =~ s/\{\}/$p/gr;
         open $fhs{$p}, "| $cmdsub" or die "failed to launch $cmdsub: $!";
+        push @open_partitions, $p;
       }
       $fhs{$p}->print($line);
+      close($p = shift @open_partitions), delete $fhs{$p}
+        while @open_partitions > 256;
     }
     close for values %fhs;
-  },
-
-  sd => sub {
-    my $sx    = 0;
-    my $sx2   = 0;
-    my $count = 0;
-    while (<>) {
-      chomp;
-      my ($x, @xs) = split /\t/;
-      $sx  += $x;
-      $sx2 += $x * $x;
-      ++$count;
-      print join("\t", sqrt(($sx2 - ($sx * $sx / $count)) / $count), @xs), "\n";
-    }
-  },
-
-  verbose => sub {
-    # Look for any number of pipe metering tools the user might have installed.
-    my $have_pv        = !system 'which pv        > /dev/null';
-    my $have_pipemeter = !system 'which pipemeter > /dev/null';
-    my $have_cpipe     = !system 'which cpipe     > /dev/null';
-
-    my @pv_prefix = $have_pv        ? qw/pv -c/
-                  : $have_pipemeter ? 'pipemeter'
-                  : $have_cpipe     ? 'cpipe'
-                  : $ENV{NFU_VERBOSE_COMMAND} // 'cat';
-
-    if ($pv_prefix[0] eq 'cat') {
-      print STDERR "nfu: requested verbose operation, but none of pv,\n";
-      print STDERR "pipemeter, or cpipe is installed\n";
-      print STDERR "(you can specify a custom verbose command by setting\n";
-      print STDERR "NFU_VERBOSE_COMMAND, e.g:\n";
-      print STDERR "export NFU_VERBOSE_COMMAND=`which cpipe`)\n";
-    }
-
-    # Assume that any NFU_VERBOSE_COMMAND is capable of taking a filename
-    # argument.
-    $pv_prefix[0] eq 'cpipe' ? exec_with_stdin(@pv_prefix)
-                             : exec_with_diamond(@pv_prefix);
   },
 
   preview => sub {
@@ -733,33 +773,28 @@ my %functions = (
 
     exec_with_diamond $less_program;
   },
-
-  bits => sub {
-    # Kind of a strange operation used to compute entropy-per-element; this is
-    # the -log_2(P) component of the entropy of something, and the argument is
-    # the total (or 1 if your elements are already probabilities).
-    my ($n) = @_;
-    $n ||= 1;
-
-    while (<>) {
-      chomp;
-      my @xs = split /\t/;
-      print join("\t", $xs[0] ? -log($xs[0] / $n) / log 2 : 0, @xs[1..$#xs]), "\n";
-    }
-  },
 );
-
-sub explode {
-  return $_ unless s/^-([^-])/$1/;
-  map {$explosions{$_} // $_} grep length, split /([-+.\d]*),?/;
-}
 
 # Print usage if the user clearly doesn't know what they're doing.
 if (!@ARGV || $ARGV[0] =~ /^-[h?]$/
            || $ARGV[0] =~ /^--(usage|help)$/) {
+
+  # Some checks for me to make sure I'm keeping the code well-maintained
+  exists $functions{$_}         or die "no function for $_" for keys %usages;
+  exists $usages{$_}            or die "no usage for $_"    for keys %functions;
+  exists $arity{$_}             or die "no arity for $_"    for keys %usages;
+  exists $usages{$_ =~ s/--//r} or die "no usage for $_"
+    for values %explosions, keys %usages;
+
   print STDERR "usage: nfu [prefix-commands...] [input-files...] commands...\n";
   print STDERR "where prefix commands are:\n\n";
 
+  print STDERR "  documentation (not used with normal commands):\n";
+  print STDERR "     --expand-pseudofile <filename>\n";
+  print STDERR "     --expand-code       <code>\n";
+  print STDERR "     --expand-gnuplot    <gnuplot options>\n";
+
+  print STDERR "\n  pipeline modifiers:\n";
   print STDERR "     --quote  -- quotes args: eval \$(nfu --quote ...)\n";
   print STDERR "     --use    <file.pl>\n";
   print STDERR "     --run    <perl code>\n";
@@ -798,24 +833,52 @@ if ($ARGV[0] eq '--quote') {
   exit 0;
 }
 
-# Load 'use' modules before any forking.
-while (@ARGV and $ARGV[0] =~ /^--(use|run)$/) {
-  my $option = shift @ARGV;
-  my $x      = shift @ARGV;
+if ($ARGV[0] =~ /^--expand/) {
+  my ($command, $x, @others) = @ARGV;
+  given ($command) {
+    print expand_filename_shorthands($x)
+          // '<invalid/nonexistent>',     "\n" when /-pseudofile$/;
+    print expand_eval_shorthands($x),     "\n" when /-code$/;
+    print expand_gnuplot_options($x),     "\n" when /-gnuplot$/;
+    default {
+      print STDERR "unknown command: $command\n";
+      exit 1;
+    }
+  }
+  exit 0;
+}
 
-  push @uses, $option, $x;
-  if ($option eq '--run') {
-    eval $x;
-    die "failed to run $x: $@" if $@;
+sub explode {
+  return $_[0] unless $_[0] =~ s/^-([^-])/$1/;
+  map {$explosions{$_} // $_} grep length, split /([-+.\d]*),?/, $_[0];
+}
+
+my @exploded;
+while (@ARGV) {
+  # Load 'use' modules before any forking.
+  if ($ARGV[0] =~ /^--(use|run)$/) {
+    my $option = shift @ARGV;
+    my $x      = shift @ARGV;
+
+    push @uses, $option, $x;
+    if ($option eq '--run') {
+      eval $x;
+      die "failed to run $x: $@" if $@;
+    } else {
+      do $x;
+      die "failed to use $x: $@" if $@;
+    }
+  } elsif (!$verbose && $ARGV[0] =~ /^--?v(erbose)?$/) {
+    shift @ARGV;
+    print STDERR "\033[2J";
+    $verbose = 1;
   } else {
-    do $x;
-    die "failed to use $x: $@" if $@;
+    push @exploded, explode shift @ARGV;
   }
 }
 
-my $reader   = undef;
-my @exploded = map explode, @ARGV;
-my @parsed   = ();
+my $reader = undef;
+my @parsed = ();
 
 @ARGV = ();
 
@@ -827,27 +890,15 @@ while (@exploded) {
   (my $command = shift @exploded) =~ s/^--//;
 
   if (defined(my $arity = $arity{$command})) {
-    my @args = splice @exploded, 0, $arity;
+    my @args;
+    push @args, shift @exploded while @exploded
+                                   && (--$arity >= 0
+                                       || $exploded[0] =~ /^[-+]?\d+/);
     push @parsed, [$command, @args];
-  } elsif (-e $command) {
-    # It's really a filename, so push it onto @ARGV. If it's compressed, run it
-    # through the appropriate decompressor first.
-    my $piped = $command =~ s/^(.*\.gz)/cat '$1' | gzip -d/ri
-                         =~ s/^(.*\.bz2)/cat '$1' | bzip -d/ri
-                         =~ s/^(.*\.xz)/cat '$1' | xz -d/ri
-                         =~ s/^(.*\.lzo)/cat '$1' | lzop -d/ri;
-    push @ARGV, $piped =~ /\|/ ? "$piped |" : $piped;
-  } elsif ($command =~ s/^(?:http(s?):)?\/\//"http" . ($1 || '') . ":\/\/"/e) {
-    # Assume a URL and curl it
-    push @ARGV, "curl $command |";
-  } elsif ($command =~ s/^sh://) {
-    # Execute a command and capture stdout
-    push @ARGV, "$command |";
-  } elsif ($command =~ /(\w*@?[^:]+):(.*)$/) {
-    # Access file over SSH
-    push @ARGV, "ssh -C '$1' cat '$2' |";
   } else {
-    die "nonexistent command/file: $command";
+    my $f = expand_filename_shorthands $command;
+    die "nonexistent pseudofile: $command" unless defined $f;
+    push @ARGV, $f;
   }
 }
 
@@ -868,9 +919,12 @@ if (@parsed) {
     # end? When we're in the middle, we want to redirect STDOUT to the pipe's
     # writer and fork; otherwise we run in-process and write directly to the
     # existing STDOUT.
+    ++$verbose_row;
     if ($i < @parsed - 1) {
       # We're in the middle, so allocate a pipe and fork.
       pipe my($new_reader), my($writer);
+      $verbose_command = $command;
+      @verbose_args    = @args;
       unless (fork) {
         # We're the child, so do STDOUT redirection.
         close $new_reader or die "failed to close pipe reader: $!";
@@ -893,6 +947,8 @@ if (@parsed) {
       # current reader.
       dup2(fileno($reader), 0) or die "failed to dup input: $!"
         if defined $reader;
+      $verbose_command = $command;
+      @verbose_args    = @args;
       $functions{$command}->(@args);
     }
 
