@@ -54,6 +54,7 @@ $ seq 100 | nfu -V              # --variance
 $ seq 100 | nfu -l              # --log, log-transform individual
 $ seq 100 | nfu -L              # --exp, inverse of --log
 $ seq 100 | nfu -q0,0.1         # --quant, quantize each number to 0.1
+$ seq 100 | nfu -q 0 0.1        # same thing
 ```
 
 These commands are each single-column by default, but you can apply them to one
@@ -62,8 +63,11 @@ or more columns by specifying a string of digits:
 ```sh
 $ seq 100 | nfu -s0             # sum column 0
 $ seq 100 \
-  | perl -ne 'print "$_\t$_\n"' \
+  | perl -ne 'chomp; print "$_\t$_\n"' \
   | nfu -s01                    # sum columns 0 and 1 independently
+$ seq 100 \
+  | perl -ne 'chomp; print "$_\t$_\n"' \
+  | nfu -s0l1                   # sum column 0, log-transform column 1
 ```
 
 ## Row transformation
