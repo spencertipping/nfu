@@ -373,7 +373,8 @@ sub fifo_for {
 
   return $fifo_name if fork;
 
-  my $command = join '|', expand_filename_shorthands($file, 1), @transforms;
+  my $command = expand_filename_shorthands($file, 1)
+              . join '', map {"$_ |"} @transforms;
   open my $into_fifo, '>', $fifo_name
     or die "failed to open fifo $fifo_name for writing: $!";
   open my $from_file, $command
