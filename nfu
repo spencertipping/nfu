@@ -515,8 +515,8 @@ my %functions = (
     }
   },
 
-  log => stateless_unary_fn(\&log),
-  exp => stateless_unary_fn(\&exp),
+  log => stateless_unary_fn(sub {log $_[0]}),
+  exp => stateless_unary_fn(sub {exp $_[0]}),
 
   quant => stateless_unary_fn(sub {
     my ($x, $quantum) = @_;
