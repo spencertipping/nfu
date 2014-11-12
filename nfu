@@ -2,12 +2,16 @@
 # nfu: Command-line numeric fu | Spencer Tipping
 # Licensed under the terms of the MIT source code license
 
-use v5.10;
+use v5.14;
 use strict;
 use warnings;
+
+use feature 'switch';
+no warnings 'experimental';
+
 use Time::HiRes qw/time/;
-use POSIX qw/dup2 mkfifo :sys_wait_h/;
-use File::Temp qw/tmpnam/;
+use POSIX       qw/dup2 mkfifo :sys_wait_h/;
+use File::Temp  qw/tmpnam/;
 
 use constant VERBOSE_INTERVAL => 30;
 
@@ -64,6 +68,34 @@ sub je {json_encode @_}
 sub jd {json_decode @_}
 
 # File functions
+sub expand_filename_shorthands {
+  my ($f, $always_make_a_command) = @_;
+  my $result;
+  if (-e $f) {
+    # It's really a filename, so push it onto @ARGV. If it's compressed, run it
+    # through the appropriate decompressor first.
+    my $piped = $f =~ s/^(.*\.gz)/cat '$1' | gzip -d/ri
+                   =~ s/^(.*\.bz2)/cat '$1' | bzip -d/ri
+                   =~ s/^(.*\.xz)/cat '$1' | xz -d/ri
+                   =~ s/^(.*\.lzo)/cat '$1' | lzop -d/ri;
+    $result = $piped =~ /\|/ ? "$piped |" : $piped;
+  } elsif ($f =~ s/^(?:http(s?):)?\/\//"http" . ($1 || '') . ":\/\/"/e) {
+    # Assume a URL and curl it
+    $result = "curl $f |";
+  } elsif ($f =~ s/^sh://) {
+    # Execute a command and capture stdout
+    $result = "$f |";
+  } elsif ($f =~ /(\w*@?[^:]+):(.*)$/) {
+    # Access file over SSH
+    $result = "ssh -C '$1' cat '$2' |";
+  } else {
+    return undef;
+  }
+
+  $always_make_a_command && $result !~ /\|/ ? "cat '$result' |"
+                                            : $result;
+}
+
 sub read_file {
   open my $fh, '<', $_[0];
   join '', <$fh>;
@@ -131,7 +163,6 @@ my %explosions = (
   a => '--average',
   A => '--aggregate',
   c => '--count',
-  d => '--delta',
   D => '--drop',
   E => '--every',
   f => '--fields',
@@ -141,6 +172,7 @@ my %explosions = (
   i => '--index',
   I => '--indexouter',
   k => '--keep',
+  K => '--remove',
   l => '--log',
   L => '--exp',
   m => '--map',
@@ -151,16 +183,15 @@ my %explosions = (
   p => '--plot',
   P => '--poll',
   q => '--quant',
-  R => '--remove',
   s => '--sum',
-  S => '--sample',
+  S => '--delta',
   T => '--take',
   V => '--variance',
   w => '--with',
 );
 
-# Number of non-numeric arguments taken by each thing. Numeric arguments are
-# automatically sent to the commands they follow.
+# Minimum number of required arguments for each function. Numeric arguments are
+# automatically forwarded, so are always optional.
 my %arity = (
   average    => 0,
   aggregate  => 1,
@@ -196,11 +227,12 @@ my %arity = (
   append     => 1,
   prepend    => 1,
   into       => 1,
-  split      => 2,
+  duplicate  => 2,
   partition  => 2,
   splot      => 1,
   sd         => 0,
   mplot      => 1,
+  preview    => 0,
 );
 
 my %usages = (
@@ -214,8 +246,8 @@ my %usages = (
   fieldsplit => 'regexp to use for splitting',
   group      => 'sorts ascending',
   rgroup     => 'sorts descending',
-  index      => 'field index, command whose output to join against',
-  indexouter => 'field index, command whose output to join against',
+  index      => 'field index, pseudofile to join against',
+  indexouter => 'field index, pseudofile to join against',
   keep       => 'row filter fn',
   log        => 'log base e of each value',
   exp        => 'e^x for each value',
@@ -228,7 +260,6 @@ my %usages = (
   poll       => 'interval in seconds, command whose output to collect',
   sum        => 'value -> total += value',
   quant      => 'number to round to',
-  reduce     => 'initial value, reducer fn',
   remove     => 'inverted row filter fn',
   sample     => 'row selection probability in [0, 1]',
   take       => 'n to take first n, +n to take last n',
@@ -238,11 +269,12 @@ my %usages = (
   append     => 'shell command; appends its output to current stream',
   prepend    => 'shell command; prepends its output to current stream',
   into       => 'shell command; copies stream into stdin of that command',
-  split      => 'two shell commands as separate arguments',
+  duplicate  => 'two shell commands as separate arguments',
   partition  => 'partition id fn, shell command (where {} is partition ID)',
   splot      => 'gnuplot arguments',
   sd         => 'running standard deviation',
   mplot      => 'gnuplot arguments per column, separated by ;',
+  preview    => '',
 );
 
 my %gnuplot_aliases = (
@@ -337,13 +369,23 @@ sub sort_options {
 sub sort_cmd {join ' ', 'sort', sort_options, @_}
 
 sub fifo_for {
-  my ($command) = @_;
+  my ($file, @transforms) = @_;
   my $fifo_name = tmpnam;
 
   mkfifo $fifo_name, 0700 or die "failed to create fifo: $!";
 
   return $fifo_name if fork;
-  system "$command > '$fifo_name'";
+
+  my $command = join '|', expand_filename_shorthands($file, 1), @transforms;
+  open my $into_fifo, '>', $fifo_name
+    or die "failed to open fifo $fifo_name for writing: $!";
+  open my $from_file, $command
+    or die "failed to open file/command $command for reading: $!";
+
+  be_verbose_as_appropriate(length), $into_fifo->print($_) while <$from_file>;
+  close $into_fifo;
+  close $from_file;
+
   unlink $fifo_name or warn "failed to unlink temporary fifo $fifo_name: $!";
   exit 0;
 }
@@ -355,29 +397,40 @@ my %functions = (
   rorder => sub {exec_with_diamond 'sort', '-rg', sort_options @_},
 
   count => sub {
-    # Same behavior as uniq -c, but delimits counts with \t
-    chomp(my $last = <>);
-    my $count = 1;
+    # Same behavior as uniq -c, but delimits counts with \t; also takes an
+    # optional series of columns to uniq by, rather than using the whole row.
+    my @columns = split //, shift // '';
+    my $last;
+    my @last;
+    my $count = 0;
+
     while (<>) {
       be_verbose_as_appropriate length;
       chomp;
-      if ($_ eq $last) {
-        ++$count;
-      } else {
-        print "$count\t$last\n";
-        $count = 1;
-        $last  = $_;
+
+      my @xs = split /\t/;
+      @xs   = @xs[@columns] if @columns;
+      $last = $_, @last = @xs unless $count++;
+
+      for (my $i = 0; $i < @xs; ++$i) {
+        if ($xs[$i] ne $last[$i]) {
+          print "$count\t$last\n";
+          $count = 0;
+          @last  = ();
+          last;
+        }
       }
     }
+
     print "$count\t$last\n";
   },
 
   index => sub {
     # Inner join by appending joined fields to the end.
-    my ($field_index, $join_cmd) = @_;
+    my ($field_index, $join_file) = @_;
     ++$field_index;
 
-    my $sorted_index = fifo_for $join_cmd . '|' . sort_cmd "-t '\t' -k1b,1";
+    my $sorted_index = fifo_for $join_file, sort_cmd "-t '\t' -k1b,1";
     my $command = sort_cmd "-t '\t' -k ${field_index}b,$field_index" .
                   "| join -t '\t' -1 $field_index - '$sorted_index'";
 
@@ -388,10 +441,10 @@ my %functions = (
 
   indexouter => sub {
     # Outer left join by appending joined fields to the end.
-    my ($field_index, $join_cmd) = @_;
+    my ($field_index, $join_file) = @_;
     ++$field_index;
 
-    my $sorted_index = fifo_for $join_cmd . '|' . sort_cmd "-t '\t' -k 1b,1";
+    my $sorted_index = fifo_for $join_file, sort_cmd "-t '\t' -k 1b,1";
     my $command = sort_cmd "-t '\t' -k ${field_index}b,$field_index" .
                   "| join -a 1 -t '\t' -1 $field_index - '$sorted_index'";
 
@@ -585,7 +638,7 @@ my %functions = (
     for (1 .. $ENV{NFU_PMAP_PARALLELISM} // 16) {
       my $mapper = quote_self @uses, '--map', $_[0];
       open my $fh, "| $mapper"
-      or die "failed to open child process $mapper: $!";
+        or die "failed to open child process $mapper: $!";
 
       vec($wbits, fileno($fh), 1) = 1;
       push @fhs, $fh;
@@ -676,7 +729,7 @@ my %functions = (
     close $fh;
   },
 
-  split => sub {
+  duplicate => sub {
     open my $fh1, "| $_[0]" or die "failed to launch $_[0]: $!";
     open my $fh2, "| $_[1]" or die "failed to launch $_[1]: $!";
     while (<>) {
@@ -725,9 +778,23 @@ my %functions = (
 # Print usage if the user clearly doesn't know what they're doing.
 if (!@ARGV || $ARGV[0] =~ /^-[h?]$/
            || $ARGV[0] =~ /^--(usage|help)$/) {
+
+  # Some checks for me to make sure I'm keeping the code well-maintained
+  exists $functions{$_}         or die "no function for $_" for keys %usages;
+  exists $usages{$_}            or die "no usage for $_"    for keys %functions;
+  exists $arity{$_}             or die "no arity for $_"    for keys %usages;
+  exists $usages{$_ =~ s/--//r} or die "no usage for $_"
+    for values %explosions, keys %usages;
+
   print STDERR "usage: nfu [prefix-commands...] [input-files...] commands...\n";
   print STDERR "where prefix commands are:\n\n";
 
+  print STDERR "  documentation (not used with normal commands):\n";
+  print STDERR "     --expand-pseudofile <filename>\n";
+  print STDERR "     --expand-code       <code>\n";
+  print STDERR "     --expand-gnuplot    <gnuplot options>\n";
+
+  print STDERR "\n  pipeline modifiers:\n";
   print STDERR "     --quote  -- quotes args: eval \$(nfu --quote ...)\n";
   print STDERR "     --use    <file.pl>\n";
   print STDERR "     --run    <perl code>\n";
@@ -763,6 +830,21 @@ if ($ARGV[0] eq '--quote') {
   # Quote all other arguments so a shell will parse them correctly.
   shift @ARGV;
   print quote_self(@ARGV), "\n";
+  exit 0;
+}
+
+if ($ARGV[0] =~ /^--expand/) {
+  my ($command, $x, @others) = @ARGV;
+  given ($command) {
+    print expand_filename_shorthands($x)
+          // '<invalid/nonexistent>',     "\n" when /-pseudofile$/;
+    print expand_eval_shorthands($x),     "\n" when /-code$/;
+    print expand_gnuplot_options($x),     "\n" when /-gnuplot$/;
+    default {
+      print STDERR "unknown command: $command\n";
+      exit 1;
+    }
+  }
   exit 0;
 }
 
@@ -808,29 +890,15 @@ while (@exploded) {
   (my $command = shift @exploded) =~ s/^--//;
 
   if (defined(my $arity = $arity{$command})) {
-    my @args = splice @exploded, 0, $arity;
+    my @args;
     push @args, shift @exploded while @exploded
-                                   && $exploded[0] =~ /^[-+]?\d+/;
+                                   && ($arity--
+                                       || $exploded[0] =~ /^[-+]?\d+/);
     push @parsed, [$command, @args];
-  } elsif (-e $command) {
-    # It's really a filename, so push it onto @ARGV. If it's compressed, run it
-    # through the appropriate decompressor first.
-    my $piped = $command =~ s/^(.*\.gz)/cat '$1' | gzip -d/ri
-                         =~ s/^(.*\.bz2)/cat '$1' | bzip -d/ri
-                         =~ s/^(.*\.xz)/cat '$1' | xz -d/ri
-                         =~ s/^(.*\.lzo)/cat '$1' | lzop -d/ri;
-    push @ARGV, $piped =~ /\|/ ? "$piped |" : $piped;
-  } elsif ($command =~ s/^(?:http(s?):)?\/\//"http" . ($1 || '') . ":\/\/"/e) {
-    # Assume a URL and curl it
-    push @ARGV, "curl $command |";
-  } elsif ($command =~ s/^sh://) {
-    # Execute a command and capture stdout
-    push @ARGV, "$command |";
-  } elsif ($command =~ /(\w*@?[^:]+):(.*)$/) {
-    # Access file over SSH
-    push @ARGV, "ssh -C '$1' cat '$2' |";
   } else {
-    die "nonexistent command/file: $command";
+    my $f = expand_filename_shorthands $command;
+    die "nonexistent pseudofile: $command" unless defined $f;
+    push @ARGV, $f;
   }
 }
 
