@@ -704,7 +704,7 @@ my %functions = (
     while (<>) {
       be_verbose_as_appropriate length;
       chomp;
-      print row(++$n, split /\t/), "\n";
+      print row(++$n, $_), "\n";
     }
   },
 
