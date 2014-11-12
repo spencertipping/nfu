@@ -892,7 +892,7 @@ while (@exploded) {
   if (defined(my $arity = $arity{$command})) {
     my @args;
     push @args, shift @exploded while @exploded
-                                   && ($arity--
+                                   && (--$arity >= 0
                                        || $exploded[0] =~ /^[-+]?\d+/);
     push @parsed, [$command, @args];
   } else {
