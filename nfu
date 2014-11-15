@@ -777,9 +777,8 @@ my %functions = (
 );
 
 # Print usage if the user clearly doesn't know what they're doing.
-if (-t STDIN && !@ARGV
-    || $ARGV[0] =~ /^-[h?]$/
-    || $ARGV[0] =~ /^--(usage|help)$/) {
+if (@ARGV ? $ARGV[0] =~ /^-[h?]$/ || $ARGV[0] =~ /^--(usage|help)$/
+          : -t STDIN) {
 
   # Some checks for me to make sure I'm keeping the code well-maintained
   exists $functions{$_}         or die "no function for $_" for keys %usages;
@@ -828,14 +827,14 @@ if (-t STDIN && !@ARGV
   exit 1;
 }
 
-if ($ARGV[0] eq '--quote') {
+if (@ARGV && $ARGV[0] eq '--quote') {
   # Quote all other arguments so a shell will parse them correctly.
   shift @ARGV;
   print quote_self(@ARGV), "\n";
   exit 0;
 }
 
-if ($ARGV[0] =~ /^--expand/) {
+if (@ARGV && $ARGV[0] =~ /^--expand/) {
   my ($command, $x, @others) = @ARGV;
   if ($command =~ /-pseudofile$/) {
     print expand_filename_shorthands($x) // '<invalid/nonexistent>', "\n";
