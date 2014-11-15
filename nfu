@@ -55,6 +55,8 @@ if (require JSON) {
   $json = JSON->new->allow_nonref->utf8(1);
 } else {
   print STDERR "note: no JSON support detected (try 'cpan install JSON')\n";
+  print STDERR "nfu will soon have its own JSON parser rather than using ";
+  print STDERR "a native library for this. Sorry for the inconvenience.";
 }
 
 # These are callable from evaled code
