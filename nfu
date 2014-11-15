@@ -777,8 +777,9 @@ my %functions = (
 );
 
 # Print usage if the user clearly doesn't know what they're doing.
-if (!@ARGV || $ARGV[0] =~ /^-[h?]$/
-           || $ARGV[0] =~ /^--(usage|help)$/) {
+if (-t STDIN && !@ARGV
+    || $ARGV[0] =~ /^-[h?]$/
+    || $ARGV[0] =~ /^--(usage|help)$/) {
 
   # Some checks for me to make sure I'm keeping the code well-maintained
   exists $functions{$_}         or die "no function for $_" for keys %usages;
@@ -878,8 +879,9 @@ while (@ARGV) {
   }
 }
 
-my $reader = undef;
-my @parsed = ();
+my $reader  = undef;
+my @parsed  = ();
+my $explain = 0;
 
 @ARGV = ();
 
@@ -896,6 +898,8 @@ while (@exploded) {
                                    && (--$arity >= 0
                                        || $exploded[0] =~ /^[-+]?\d+/);
     push @parsed, [$command, @args];
+  } elsif ($command eq 'explain') {
+    $explain = 1;
   } else {
     my $f = expand_filename_shorthands $command;
     die "nonexistent pseudofile: $command" unless defined $f;
@@ -908,7 +912,12 @@ push @parsed, ['preview'] if !$ENV{NFU_NO_PAGER}    # we can page
                           && (!-t STDIN || @ARGV)   # not interacting for input
                           && -t STDOUT;             # interacting for output
 
-if (@parsed) {
+if ($explain) {
+  # Explain what we would have done with the given command line.
+  printf "file\t%s\n", $_ for @ARGV;
+  printf "--%s\t%s\n", ${$_}[0], join "\t",
+                                 map "'$_'", @{$_}[1 .. $#$_] for @parsed;
+} elsif (@parsed) {
   # Note: the loop below uses pipe/fork/dup2 instead of a more idiomatic Open2
   # call. I don't have a good reason for this other than to figure out how the
   # low-level stuff worked.
