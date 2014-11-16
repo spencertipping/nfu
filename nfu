@@ -49,10 +49,14 @@ sub mean {scalar @_ && sum(@_) / @_}
 
 # JSON support (if available)
 our $json;
-if (require JSON) {
+if (eval {require JSON}) {
   JSON->import;
   no warnings qw(uninitialized);
   $json = JSON->new->allow_nonref->utf8(1);
+} elsif (eval {require JSON::PP}) {
+  JSON::PP->import;
+  no warnings qw(uninitialized);
+  $json = JSON::PP->new->allow_nonref->utf8(1);
 } else {
   print STDERR "note: no JSON support detected (try 'cpan install JSON')\n";
   print STDERR "nfu will soon have its own JSON parser rather than using ";
