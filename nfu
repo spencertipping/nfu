@@ -28,7 +28,7 @@ use List::Util qw(first max maxstr min minstr reduce shuffle sum);
 # Same for this, which is especially useful from aggregators because multiple
 # values create multiple output rows, not multiple columns on the same output
 # row.
-sub row {join "\t", @_}
+sub row {join "\t", map s/\n//gr, @_}
 
 # Order-preserving unique values for strings. This is just too useful not to
 # provide.
