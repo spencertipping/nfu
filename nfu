@@ -64,6 +64,21 @@ if (eval {require JSON}) {
 }
 
 # These are callable from evaled code
+sub read_file {
+  open my $fh, '<', $_[0];
+  my $result = join '', <$fh>;
+  close $fh;
+  $result;
+}
+
+sub read_lines {
+  open my $fh, '<', $_[0];
+  my @result;
+  chomp, push @result, $_ for <$fh>;
+  close $fh;
+  @result;
+}
+
 sub json_encode {$json->encode(@_)}
 sub json_decode {$json->decode(@_)}
 
@@ -97,18 +112,6 @@ sub expand_filename_shorthands {
 
   $always_make_a_command && $result !~ /\|/ ? "cat '$result' |"
                                             : $result;
-}
-
-sub read_file {
-  open my $fh, '<', $_[0];
-  join '', <$fh>;
-}
-
-sub read_lines {
-  open my $fh, '<', $_[0];
-  my @result;
-  chomp, push @result, $_ for <$fh>;
-  @result;
 }
 
 # Flags
@@ -282,6 +285,14 @@ my %usages = (
   sd         => 'running standard deviation',
   mplot      => 'gnuplot arguments per column, separated by ;',
   preview    => '',
+);
+
+my %env_docs = (
+  NFU_SORT_BUFFER   => 'default 256M; size of in-memory sort for -g and -o',
+  NFU_SORT_PARALLEL => 'default 4; number of concurrent sorts to run',
+  NFU_SORT_COMPRESS => 'default none; compression program for sort tempfiles',
+  NFU_NO_PAGER      => 'if set, nfu will not use "less" to preview stdout',
+  NFU_PMAP_PARALLELISM => 'number of subprocesses for -M',
 );
 
 my %gnuplot_aliases = (
@@ -856,6 +867,11 @@ if (@ARGV ? $ARGV[0] =~ /^-[h?]$/ || $ARGV[0] =~ /^--(usage|help)$/
   print STDERR "\ngnuplot expansions:\n\n";
   printf STDERR "  %2s -> '%s'\n", $_, $gnuplot_aliases{$_}
   for sort keys %gnuplot_aliases;
+
+  my $env_len = 1 + max map length, keys %env_docs;
+  print STDERR "\nenvironment variables:\n\n";
+  printf STDERR "  %-${env_len}s %s\n", $_, $env_docs{$_}
+  for sort keys %env_docs;
 
   print STDERR "\n";
   print STDERR "see https://github.com/spencertipping/nfu for documentation\n";
