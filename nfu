@@ -167,6 +167,7 @@ my %explosions = (
   a => '--average',
   A => '--aggregate',
   c => '--count',
+  C => '--uncount',
   D => '--drop',
   E => '--every',
   f => '--fields',
@@ -200,6 +201,7 @@ my %arity = (
   average    => 0,
   aggregate  => 1,
   count      => 0,
+  uncount    => 0,
   delta      => 0,
   drop       => 0,
   every      => 0,
@@ -243,6 +245,7 @@ my %usages = (
   average    => 'window size (0 for full average) -- running average',
   aggregate  => 'aggregator fn',
   count      => 'counts by first column value; like uniq -c',
+  uncount    => 'the opposite of --count; repeats each row N times',
   delta      => 'value -> difference from last value',
   drop       => 'number of records to drop',
   every      => 'n (returns every nth row)',
@@ -417,8 +420,8 @@ my %functions = (
       @xs   = @xs[@columns] if @columns;
       $last = $_, @last = @xs unless ++$count;
 
-      for (my $i = 0; $i < @xs; ++$i) {
-        if ($xs[$i] ne $last[$i]) {
+      for (my $i = 0; $i < max scalar(@xs), scalar(@last); ++$i) {
+        if (!defined $xs[$i] || !defined $last[$i] || $xs[$i] ne $last[$i]) {
           print "$count\t$last\n";
           $count = 0;
           @last  = @xs;
@@ -430,6 +433,14 @@ my %functions = (
 
     ++$count;
     print "$count\t$last\n";
+  },
+
+  uncount => sub {
+    while (<>) {
+      my ($n, $line) = split /\t/, $_, 2;
+      $line //= "\n";
+      print $line for 1..$n;
+    }
   },
 
   index => sub {
@@ -690,11 +701,18 @@ my %functions = (
   },
 
   fields => sub {
-    my @fs = split //, $_[0];
+    my ($fields)   = @_;
+    my $everything = $fields =~ s/\.$//;
+    my @fs         = split //, $fields;
+    $everything &&= 1 + max @fs;
+
     while (<>) {
       be_verbose_as_appropriate length;
       chomp;
-      print join("\t", map $_ // '', (split /\t/)[@fs]), "\n";
+      my @xs = split /\t/;
+      my @ys = @xs[@fs];
+      push @ys, @xs[$everything .. $#xs] if $everything;
+      print join("\t", map $_ // '', @ys), "\n";
     }
   },
 
