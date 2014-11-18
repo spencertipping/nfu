@@ -198,13 +198,13 @@ my %explosions = (
 # Minimum number of required arguments for each function. Numeric arguments are
 # automatically forwarded, so are always optional.
 my %arity = (
-  average    => 0,
+  average    => 1,
   aggregate  => 1,
   count      => 0,
   uncount    => 0,
   delta      => 0,
   drop       => 0,
-  every      => 0,
+  every      => 1,
   fields     => 0,
   fieldsplit => 1,
   group      => 0,
@@ -222,9 +222,9 @@ my %arity = (
   plot       => 1,
   poll       => 2,
   sum        => 0,
-  quant      => 0,
+  quant      => 1,
   remove     => 1,
-  sample     => 0,
+  sample     => 1,
   take       => 0,
   variance   => 0,
   with       => 1,
@@ -314,9 +314,10 @@ sub compile_eval_into_function {
 }
 
 sub stateless_unary_fn {
-  my ($f) = @_;
-  sub {
-    my @columns = split //, shift // '0';
+  my ($name, $f) = @_;
+  my $arity = $arity{$name};
+  ($name, sub {
+    my @columns = split //, (@_ > $arity ? shift : undef) // '0';
     while (<>) {
       be_verbose_as_appropriate length;
       chomp;
@@ -324,13 +325,14 @@ sub stateless_unary_fn {
       $fs[$_] = $f->($fs[$_], @_) for @columns;
       print row(@fs), "\n";
     }
-  };
+  });
 }
 
 sub stateful_unary_fn {
-  my ($setup, $f) = @_;
-  sub {
-    my @columns = split //, shift // '0';
+  my ($name, $setup, $f) = @_;
+  my $arity = $arity{$name};
+  ($name, sub {
+    my @columns = split //, (@_ > $arity ? shift : undef) // '0';
     my %states;
     $states{$_} = $setup->(@_) for @columns;
     while (<>) {
@@ -340,7 +342,7 @@ sub stateful_unary_fn {
       $fs[$_] = $f->($fs[$_], $states{$_}, @_) for @columns;
       print row(@fs), "\n";
     }
-  };
+  });
 }
 
 sub exec_with_stdin {
@@ -485,7 +487,7 @@ my %functions = (
     close $fh;
   },
 
-  average => stateful_unary_fn(
+  stateful_unary_fn('average',
     sub {my ($size, $n, $total) = ($_[0] // 0, 0, 0);
          [$size, $n, $total, []]},
     sub {
@@ -532,10 +534,10 @@ my %functions = (
     }
   },
 
-  log => stateless_unary_fn(sub {log $_[0]}),
-  exp => stateless_unary_fn(sub {exp $_[0]}),
+  stateless_unary_fn('log', sub {log $_[0]}),
+  stateless_unary_fn('exp', sub {exp $_[0]}),
 
-  quant => stateless_unary_fn(sub {
+  stateless_unary_fn('quant', sub {
     my ($x, $quantum) = @_;
     $quantum ||= 1.0;
     my $sign = $x < 0 ? -1 : 1;
@@ -577,19 +579,19 @@ my %functions = (
     system($command), sleep $sleep while 1;
   },
 
-  delta => stateful_unary_fn(
+  stateful_unary_fn('delta',
     sub {[0]},
     sub {my ($x, $state) = @_;
          my $v = $x - $$state[0];
          $$state[0] = $x;
          $v}),
 
-  sum => stateful_unary_fn(
+  stateful_unary_fn('sum',
     sub {[0]},
     sub {my ($x, $state) = @_;
          $$state[0] += $x}),
 
-  variance => stateful_unary_fn(
+  stateful_unary_fn('variance',
     sub {[0, 0, 0]},
     sub {my ($x, $state) = @_;
          $$state[0] += $x;
@@ -598,7 +600,7 @@ my %functions = (
          my ($sx, $sx2, $count) = @$state;
          ($sx2 - ($sx * $sx / $count)) / $count}),
 
-  sd => stateful_unary_fn(
+  stateful_unary_fn('sd',
     sub {[0, 0, 0]},
     sub {my ($x, $state) = @_;
          $$state[0] += $x;
