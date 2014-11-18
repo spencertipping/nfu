@@ -797,6 +797,7 @@ if (@ARGV ? $ARGV[0] =~ /^-[h?]$/ || $ARGV[0] =~ /^--(usage|help)$/
   print STDERR "where prefix commands are:\n\n";
 
   print STDERR "  documentation (not used with normal commands):\n";
+  print STDERR "     --explain           <other-options>\n";
   print STDERR "     --expand-pseudofile <filename>\n";
   print STDERR "     --expand-code       <code>\n";
   print STDERR "     --expand-gnuplot    <gnuplot options>\n";
