@@ -277,7 +277,7 @@ my %usages = (
   prepend    => 'shell command; prepends its output to current stream',
   into       => 'shell command; copies stream into stdin of that command',
   duplicate  => 'two shell commands as separate arguments',
-  partition  => 'partition id fn, shell command (where {} is partition ID)',
+  partition  => 'partition id fn, shell command (using {})',
   splot      => 'gnuplot arguments',
   sd         => 'running standard deviation',
   mplot      => 'gnuplot arguments per column, separated by ;',
@@ -845,9 +845,10 @@ if (@ARGV ? $ARGV[0] =~ /^-[h?]$/ || $ARGV[0] =~ /^--(usage|help)$/
   for my $cmd (sort keys %usages) {
     my $short = $short_lookup{$cmd};
     $short = defined $short ? "-$short|" : '   ';
-    printf STDERR "  %s--%-${len}s %s\n",
+    printf STDERR "  %s--%-${len}s(%d) %s\n",
                   $short,
                   $cmd,
+                  $arity{$cmd},
                   $usages{$cmd} ? $arity{$cmd} ? "<$usages{$cmd}>"
                                                : "-- $usages{$cmd}" : '';
   }
