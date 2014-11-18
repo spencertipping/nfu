@@ -198,7 +198,7 @@ my %explosions = (
 # Minimum number of required arguments for each function. Numeric arguments are
 # automatically forwarded, so are always optional.
 my %arity = (
-  average    => 1,
+  average    => 0,
   aggregate  => 1,
   count      => 0,
   uncount    => 0,
