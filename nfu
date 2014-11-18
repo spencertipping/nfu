@@ -534,8 +534,17 @@ my %functions = (
     }
   },
 
-  stateless_unary_fn('log', sub {log $_[0]}),
-  stateless_unary_fn('exp', sub {exp $_[0]}),
+  stateless_unary_fn('log', sub {
+    my ($x, $base) = @_;
+    my $log = log $x;
+    $log /= log $base if defined $base;
+    $log;
+  }),
+
+  stateless_unary_fn('exp', sub {
+    my ($x, $base) = @_;
+    defined $base ? $base ** $x : exp $x;
+  }),
 
   stateless_unary_fn('quant', sub {
     my ($x, $quantum) = @_;
