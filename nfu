@@ -64,15 +64,16 @@ if (eval {require JSON}) {
 }
 
 # These are callable from evaled code
+sub expand_filename_shorthands;
 sub read_file {
-  open my $fh, '<', $_[0];
+  open my $fh, expand_filename_shorthands $_[0], 1;
   my $result = join '', <$fh>;
   close $fh;
   $result;
 }
 
 sub read_lines {
-  open my $fh, '<', $_[0];
+  open my $fh, expand_filename_shorthands $_[0], 1;
   my @result;
   chomp, push @result, $_ for <$fh>;
   close $fh;
@@ -227,6 +228,7 @@ my %arity = (
   sum        => 0,
   quant      => 1,
   remove     => 1,
+  repeat     => 2,
   sample     => 1,
   take       => 0,
   variance   => 0,
@@ -235,13 +237,14 @@ my %arity = (
   # Commands with no shorthands
   append     => 1,
   prepend    => 1,
-  into       => 1,
+  tee        => 1,
   duplicate  => 2,
   partition  => 2,
   splot      => 1,
   sd         => 0,
   mplot      => 1,
   preview    => 0,
+  pipe       => 1,
 );
 
 my %usages = (
@@ -271,28 +274,31 @@ my %usages = (
   sum        => 'value -> total += value',
   quant      => 'number to round to',
   remove     => 'inverted row filter fn',
+  repeat     => 'repeat count, pseudofile to repeat',
   sample     => 'row selection probability in [0, 1]',
   take       => 'n to take first n, +n to take last n',
   variance   => 'running variance',
   with       => 'command whose output to join column-wise onto input',
 
-  append     => 'shell command; appends its output to current stream',
-  prepend    => 'shell command; prepends its output to current stream',
-  into       => 'shell command; copies stream into stdin of that command',
+  append     => 'pseudofile; appends its contents to current stream',
+  prepend    => 'pseudofile; prepends its contents to current stream',
+  tee        => 'shell command; duplicates stream to stdin of that command',
   duplicate  => 'two shell commands as separate arguments',
   partition  => 'partition id fn, shell command (using {})',
   splot      => 'gnuplot arguments',
   sd         => 'running standard deviation',
   mplot      => 'gnuplot arguments per column, separated by ;',
   preview    => '',
+  pipe       => 'shell command to pipe through',
 );
 
 my %env_docs = (
-  NFU_SORT_BUFFER   => 'default 256M; size of in-memory sort for -g and -o',
-  NFU_SORT_PARALLEL => 'default 4; number of concurrent sorts to run',
-  NFU_SORT_COMPRESS => 'default none; compression program for sort tempfiles',
-  NFU_NO_PAGER      => 'if set, nfu will not use "less" to preview stdout',
+  NFU_SORT_BUFFER      => 'default 256M; size of in-memory sort for -g and -o',
+  NFU_SORT_PARALLEL    => 'default 4; number of concurrent sorts to run',
+  NFU_SORT_COMPRESS    => 'default none; compression program for sort tempfiles',
+  NFU_NO_PAGER         => 'if set, nfu will not use "less" to preview stdout',
   NFU_PMAP_PARALLELISM => 'number of subprocesses for -M',
+  NFU_MAX_FILEHANDLES  => 'default 256; maximum filehandles for --partition',
 );
 
 my %gnuplot_aliases = (
@@ -485,17 +491,29 @@ my %functions = (
   },
 
   with => sub {
-    # Like 'paste', but for commands. Joins lines with \t.
-    my ($command) = @_;
-    open my $fh, "$command |" or die "failed to exec $command: $!";
+    # Like 'paste'. Joins lines with \t.
+    my ($f) = @_;
+    open my $fh, expand_filename_shorthands $f, 1
+      or die "failed to open --join pseudofile $f: $!";
     my ($part1, $part2);
     while (defined($part1 = <>) and defined($part2 = <$fh>)) {
       be_verbose_as_appropriate length $part1 + length $part2;
       chomp $part1;
       chomp $part2;
-      print "$part1\t$part2\n";
+      print $part1, "\t", $part2, "\n";
     }
     close $fh;
+  },
+
+  repeat => sub {
+    my ($n, $f) = @_;
+    my $count = 0;
+    while (!$n || $count++ < $n) {
+      open my $fh, expand_filename_shorthands $f, 1
+        or die "failed to open --repeat pseudofile $f: $!";
+      be_verbose_as_appropriate(length), print while <$fh>;
+      close $fh;
+    }
   },
 
   stateful_unary_fn('average',
@@ -757,16 +775,31 @@ my %functions = (
   },
 
   prepend => sub {
-    system $_[0];
+    open my $fh, expand_filename_shorthands $_[0], 1
+      or die "failed to open --prepend pseudofile $_[0]: $!";
+    be_verbose_as_appropriate(length), print while <$fh>;
+    close $fh;
     print while <>;
   },
 
   append => sub {
+    open my $fh, expand_filename_shorthands $_[0], 1
+      or die "failed to open --append pseudofile $_[0]: $!";
     print while <>;
-    system $_[0];
+    be_verbose_as_appropriate(length), print while <$fh>;
+    close $fh;
   },
 
-  into => sub {
+  pipe => sub {
+    open my $fh, "| $_[0]" or die "failed to launch $_[0]: $!";
+    while (<>) {
+      be_verbose_as_appropriate length;
+      $fh->print($_);
+    }
+    close $fh;
+  },
+
+  tee => sub {
     open my $fh, "| $_[0]" or die "failed to launch $_[0]: $!";
     while (<>) {
       be_verbose_as_appropriate length;
@@ -791,7 +824,6 @@ my %functions = (
   partition => sub {
     my ($splitter, $cmd) = @_;
     my %fhs;
-    $splitter =~ s/%(\d+)/\$_[$1]/g;
     my $f = compile_eval_into_function $splitter, 'partition function';
 
     my @open_partitions;
@@ -806,7 +838,7 @@ my %functions = (
       }
       $fhs{$p}->print($line);
       close($p = shift @open_partitions), delete $fhs{$p}
-        while @open_partitions > 256;
+        while @open_partitions > ($ENV{NFU_MAX_FILEHANDLES} // 256);
     }
     close for values %fhs;
   },
