@@ -369,7 +369,7 @@ sub exec_with_stdin {
 }
 
 sub exec_with_diamond {
-  if (grep /\|/, @ARGV) {
+  if ($verbose || grep /\|/, @ARGV) {
     # Arguments are specified in filenames and involve processes, so use perl
     # to forward data.
     exec_with_stdin @_;
