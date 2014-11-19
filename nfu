@@ -282,7 +282,7 @@ my %usages = (
 
   append     => 'pseudofile; appends its contents to current stream',
   prepend    => 'pseudofile; prepends its contents to current stream',
-  tee        => 'shell command; duplicates stream to stdin of that command',
+  tee        => 'shell command; duplicates data to stdin of command',
   duplicate  => 'two shell commands as separate arguments',
   partition  => 'partition id fn, shell command (using {})',
   splot      => 'gnuplot arguments',
