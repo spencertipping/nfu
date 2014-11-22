@@ -104,6 +104,10 @@ sub expand_filename_shorthands {
   } elsif ($f =~ s/^sh://) {
     # Execute a command and capture stdout
     $result = "$f |";
+  } elsif ($f =~ s/^perl://) {
+    # Evaluate a Perl expression
+    $f =~ s/'/'"'"'/g;
+    $result = "perl -e 'print \$_, \"\\n\" for ($f)' |";
   } elsif ($f =~ /(\w*@?[^:]+):(.*)$/) {
     # Access file over SSH
     $result = "ssh -C '$1' cat '$2' |";
