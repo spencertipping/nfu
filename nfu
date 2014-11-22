@@ -636,7 +636,7 @@ my %functions = (
          $$state[1] += $x * $x;
          $$state[2]++;
          my ($sx, $sx2, $count) = @$state;
-         ($sx2 - ($sx * $sx / $count)) / $count}),
+         ($sx2 - ($sx * $sx / $count)) / ($count - 1 || 1)}),
 
   stateful_unary_fn('sd',
     sub {[0, 0, 0]},
@@ -645,7 +645,7 @@ my %functions = (
          $$state[1] += $x * $x;
          $$state[2]++;
          my ($sx, $sx2, $count) = @$state;
-         sqrt(($sx2 - ($sx * $sx / $count)) / $count)}),
+         sqrt(($sx2 - ($sx * $sx / $count)) / ($count - 1 || 1))}),
 
   take => sub {
     if ($_[0] =~ s/^\+//) {
