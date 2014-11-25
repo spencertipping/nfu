@@ -462,6 +462,7 @@ my %functions = (
 
   uncount => sub {
     while (<>) {
+      be_verbose_as_appropriate length;
       my ($n, $line) = split /\t/, $_, 2;
       $line //= "\n";
       print $line for 1..$n;
