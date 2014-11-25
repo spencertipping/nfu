@@ -215,6 +215,7 @@ my %arity = (
   every      => 1,
   fields     => 0,
   fieldsplit => 1,
+  fold       => 1,
   group      => 0,
   rgroup     => 0,
   index      => 2,
@@ -261,6 +262,7 @@ my %usages = (
   every      => 'n (returns every nth row)',
   fields     => 'string of digits, each a zero-indexed column selector',
   fieldsplit => 'regexp to use for splitting',
+  fold       => 'function that returns true when line should be folded',
   group      => 'sorts ascending',
   rgroup     => 'sorts descending',
   index      => 'field index, pseudofile to join against',
@@ -565,6 +567,22 @@ my %functions = (
       $_ = ${$columns[0]}[0];
       print $_, "\n" for $f->(@columns);
     }
+  },
+
+  fold => sub {
+    my $f = compile_eval_into_function $_[0], 'fold function';
+    my @saved;
+    while (my $line = <>) {
+      be_verbose_as_appropriate length $line;
+      chomp $line;
+      if ($f->(split /\t/, $line)) {
+        push @saved, $line;
+      } else {
+        print row(@saved), "\n" if @saved;
+        @saved = ($line);
+      }
+    }
+    print row(@saved), "\n" if @saved;
   },
 
   stateless_unary_fn('log', sub {
