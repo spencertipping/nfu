@@ -387,11 +387,13 @@ sub exec_with_diamond {
 }
 
 sub sort_options {
-  my ($column) = @_;
+  my ($column_spec) = @_;
+  my @columns       = split //, $column_spec // '';
   return '-S', $ENV{NFU_SORT_BUFFER} || '256M',
          '--parallel=' . ($ENV{NFU_SORT_PARALLEL} || 4),
-         (defined $column
-           ? ('-t', "\t", '-k', $column + 1)
+         (@columns
+           ? ('-t', "\t",
+              map {('-k', sprintf "%d,%d", $_ + 1, $_ + 1)} @columns)
            : ()),
          ($ENV{NFU_SORT_COMPRESS}
            ? ("--compress-program=$ENV{NFU_SORT_COMPRESS}")
