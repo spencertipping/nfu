@@ -284,7 +284,7 @@ my %usages = (
   sample     => 'row selection probability in [0, 1]',
   take       => 'n to take first n, +n to take last n',
   variance   => 'running variance',
-  with       => 'command whose output to join column-wise onto input',
+  with       => 'pseudofile to join column-wise onto input',
 
   append     => 'pseudofile; appends its contents to current stream',
   prepend    => 'pseudofile; prepends its contents to current stream',
@@ -503,10 +503,10 @@ my %functions = (
     # Like 'paste'. Joins lines with \t.
     my ($f) = @_;
     open my $fh, expand_filename_shorthands $f, 1
-      or die "failed to open --join pseudofile $f: $!";
+      or die "failed to open --with pseudofile $f: $!";
     my ($part1, $part2);
     while (defined($part1 = <>) and defined($part2 = <$fh>)) {
-      be_verbose_as_appropriate length $part1 + length $part2;
+      be_verbose_as_appropriate length($part1) + length($part2);
       chomp $part1;
       chomp $part2;
       print $part1, "\t", $part2, "\n";
