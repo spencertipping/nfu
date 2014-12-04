@@ -677,12 +677,13 @@ my %functions = (
       # Take last n, so we need a line queue
       my @q;
       my $i = 0;
-      $q[$i++ % $_[0]] = $_ while <>;
+      be_verbose_as_appropriate(length), $q[$i++ % $_[0]] = $_ while <>;
       print for @q[$i % $_[0] .. $#q];
       print for @q[0 .. $i % $_[0] - 1];
     } else {
       my $n = $_[0] // 1;
       while (<>) {
+        be_verbose_as_appropriate length;
         last if --$n < 0;
         print;
       }
@@ -698,8 +699,11 @@ my %functions = (
 
   drop => sub {
     my $n = $_[0] // 1;
-    while (<>) { last if --$n <= 0 }
-    print while <>;
+    while (<>) {
+      be_verbose_as_appropriate length;
+      last if --$n <= 0;
+    }
+    be_verbose_as_appropriate(length), print while <>;
   },
 
   map => sub {
