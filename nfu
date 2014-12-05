@@ -1009,7 +1009,8 @@ while (@exploded) {
     my @args;
     push @args, shift @exploded while @exploded
                                    && (--$arity >= 0
-                                       || $exploded[0] =~ /^[-+]?\d+/);
+                                       || ! -e $exploded[0]
+                                          && $exploded[0] =~ /^[-+]?\d+/);
     push @parsed, [$command, @args];
   } elsif ($command eq 'explain') {
     $explain = 1;
