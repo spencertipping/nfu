@@ -250,6 +250,7 @@ my %arity = (
   mplot      => 1,
   preview    => 0,
   pipe       => 1,
+  entropy    => 0,
 );
 
 my %usages = (
@@ -296,6 +297,7 @@ my %usages = (
   mplot      => 'gnuplot arguments per column, separated by ;',
   preview    => '',
   pipe       => 'shell command to pipe through',
+  entropy    => 'running entropy of relative probabilities/frequencies',
 );
 
 my %env_docs = (
@@ -671,6 +673,23 @@ my %functions = (
          $$state[2]++;
          my ($sx, $sx2, $count) = @$state;
          sqrt(($sx2 - ($sx * $sx / $count)) / ($count - 1 || 1))}),
+
+  stateful_unary_fn('entropy',
+    # state contains [$total, $entropy_so_far] and uses the following
+    # associative combiner (where F(X) = frequency of X, unscaled probability):
+    #
+    # let t = F(A) + F(B)
+    # H(A + B) = F(A)/t * (-log(F(A)/t) + H(A))
+    #          + F(B)/t * (-log(F(B)/t) + H(B))
+
+    sub {[0, 0]},
+    sub {my ($x, $state) = @_;
+         my ($f0, $h0)   = @$state;
+         my $f           = $$state[0] += $x;
+         my $p           = $x  / $f;
+         my $p0          = $f0 / $f;
+         $$state[1]      = $p0 * (($p0 > 0 ? -log($p0) / log(2) : 0) + $h0)
+                         + $p  *  ($p  > 0 ? -log($p)  / log(2) : 0)}),
 
   take => sub {
     if ($_[0] =~ s/^\+//) {
