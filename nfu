@@ -327,8 +327,10 @@ sub expand_gnuplot_options {
 }
 
 sub expand_eval_shorthands {
-  $_[0] =~ s/%(\d+)/\$_[$1]/gr
-        =~ s/([a-zA-Z0-9_\)\}\]?\$])\.([\$_a-zA-Z][-_\w?\$]*)/$1\->{'$2'}/gr;
+  my $code = $_[0] =~ s/%(\d+)/\$_[$1]/gr;
+  1 while $code =~ s/([a-zA-Z0-9_\)\}\]?\$])\.([\$_a-zA-Z][-0-9_\w?\$]*)
+                    /$1\->{'$2'}/gx;
+  $code;
 }
 
 sub compile_eval_into_function {
