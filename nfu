@@ -184,6 +184,8 @@ my %explosions = (
   G => '--rgroup',
   i => '--index',
   I => '--indexouter',
+  j => '--join',
+  J => '--joinouter',
   k => '--keep',
   K => '--remove',
   l => '--log',
@@ -220,6 +222,8 @@ my %arity = (
   rgroup     => 0,
   index      => 2,
   indexouter => 2,
+  join       => 2,
+  joinouter  => 2,
   keep       => 1,
   log        => 0,
   exp        => 0,
@@ -266,8 +270,10 @@ my %usages = (
   fold       => 'function that returns true when line should be folded',
   group      => 'sorts ascending, takes optional column list',
   rgroup     => 'sorts descending, takes optional column list',
-  index      => 'field index, pseudofile to join against',
-  indexouter => 'field index, pseudofile to join against',
+  index      => 'field index, unsorted pseudofile to join against',
+  indexouter => 'field index, unsorted pseudofile to join against',
+  join       => 'field index, sorted pseudofile to join against',
+  joinouter  => 'field index, sorted pseudofile to join against',
   keep       => 'row filter fn',
   log        => 'optional base (default e)',
   exp        => 'optional base (default e)',
@@ -495,6 +501,34 @@ my %functions = (
     ++$field_index;
 
     my $sorted_index = fifo_for $join_file, sort_cmd "-t '\t' -k 1b,1";
+    my $command = sort_cmd "-t '\t' -k ${field_index}b,$field_index" .
+                  "| join -a 1 -t '\t' -1 $field_index - '$sorted_index'";
+
+    open my $to_join, "| $command" or die "failed to exec $command: $!";
+    be_verbose_as_appropriate(length), print $to_join $_ while <>;
+    close $to_join;
+  },
+
+  join => sub {
+    # Inner join against sorted data by appending joined fields to the end.
+    my ($field_index, $join_file) = @_;
+    ++$field_index;
+
+    my $sorted_index = fifo_for $join_file;
+    my $command = sort_cmd "-t '\t' -k ${field_index}b,$field_index" .
+                  "| join -t '\t' -1 $field_index - '$sorted_index'";
+
+    open my $to_join, "| $command" or die "failed to exec $command: $!";
+    be_verbose_as_appropriate(length), print $to_join $_ while <>;
+    close $to_join;
+  },
+
+  joinouter => sub {
+    # Outer left join by appending joined fields to the end.
+    my ($field_index, $join_file) = @_;
+    ++$field_index;
+
+    my $sorted_index = fifo_for $join_file;
     my $command = sort_cmd "-t '\t' -k ${field_index}b,$field_index" .
                   "| join -a 1 -t '\t' -1 $field_index - '$sorted_index'";
 
