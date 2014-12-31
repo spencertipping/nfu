@@ -7,7 +7,7 @@ use strict;
 use warnings;
 
 use Time::HiRes qw/time/;
-use POSIX       qw/dup2 mkfifo :sys_wait_h/;
+use POSIX       qw/dup2 mkfifo setsid :sys_wait_h/;
 use File::Temp  qw/tmpnam/;
 
 use constant VERBOSE_INTERVAL => 30;
@@ -672,7 +672,23 @@ my %functions = (
     system 'gnuplot', '-e',
            'plot ' . join(',', map("\"$fname\" $_", @gnuplot_options)),
            '-persist';
-    unlink $fname or warn "failed to unlink mplot tempfile $fname: $!";
+
+    # HACK: the problem is that gnuplot internally forks a subprocess for the
+    # plot window, which we won't be able to see from here (that I know of). If
+    # we delete the file before that subprocess exits, then any zoom operations
+    # will cause gnuplot to abruptly exit.
+    #
+    # I'm sure there's a better way to solve this, but for now this should do
+    # the job for now.
+    unless (fork) {
+      setsid;
+      close STDIN;
+      close STDOUT;
+      unless (fork) {
+        sleep 3600;
+        unlink $fname or die "failed to unlink $fname: $!";
+      }
+    }
   },
 
   poll => sub {
