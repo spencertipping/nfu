@@ -939,7 +939,7 @@ my %functions = (
         push @open_partitions, $p;
       }
       $fhs{$p}->print($line);
-      close($p = shift @open_partitions), delete $fhs{$p}
+      close($fhs{$p = shift @open_partitions}), delete $fhs{$p}
         while @open_partitions > ($ENV{NFU_MAX_FILEHANDLES} // 64);
     }
     close for values %fhs;
