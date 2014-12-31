@@ -312,7 +312,7 @@ my %env_docs = (
   NFU_SORT_COMPRESS    => 'default none; compression program for sort tempfiles',
   NFU_NO_PAGER         => 'if set, nfu will not use "less" to preview stdout',
   NFU_PMAP_PARALLELISM => 'number of subprocesses for -M',
-  NFU_MAX_FILEHANDLES  => 'default 256; maximum filehandles for --partition',
+  NFU_MAX_FILEHANDLES  => 'default 64; maximum #subprocesses for --partition',
 );
 
 my %gnuplot_aliases = (
@@ -940,7 +940,7 @@ my %functions = (
       }
       $fhs{$p}->print($line);
       close($p = shift @open_partitions), delete $fhs{$p}
-        while @open_partitions > ($ENV{NFU_MAX_FILEHANDLES} // 256);
+        while @open_partitions > ($ENV{NFU_MAX_FILEHANDLES} // 64);
     }
     close for values %fhs;
   },
