@@ -670,7 +670,7 @@ sub hadoop_into {
 
   my $hadoop_command =
     hadoop('jar',
-           "-D mapred.job.name=" . shellquote($jobname) . " $extra_args",
+           "-D mapred.job.name=" . shell_quote($jobname) . " $extra_args",
            $streaming_jar,
            @self_dep,
            @input_files,
