@@ -88,7 +88,7 @@ sub jd {json_decode @_}
 
 # File functions
 sub hadoop_ls;
-sub hadoop_matched_partfile;
+sub hadoop_matched_partfiles;
 sub expand_filename_shorthands {
   # NB: we prepend a shell comment containing the original $f so anyone
   # downstream can get it back. This is currently used by Hadoop to reuse data
@@ -122,7 +122,7 @@ sub expand_filename_shorthands {
     # Mapside join against corresponding partfile(s)
     $result = $original
             . expand_filename_shorthands(
-                hadoop_matched_partfile $f, $ENV{map_input_file});
+                hadoop_matched_partfiles $f, $ENV{map_input_file});
   } elsif ($f =~ s/^perl://) {
     # Evaluate a Perl expression
     $f =~ s/'/'"'"'/g;
@@ -506,7 +506,7 @@ sub hadoop_ls {
   # huge mess.
   # http://stackoverflow.com/questions/21569172/how-to-list-only-file-name-in-hdfs
   my $ls_command = hadoop('fs', '-ls', $_[0])
-             . " | sed 1d"
+             . " | grep -v '^Found'"
              . " | perl -wlne 'print \"hdfs:\" . +(split \" \",\$_,8)[7]'";
   grep /\/[^_][^\/]*$/, split /\n/, join '', qx/$ls_command/;
 }
@@ -525,7 +525,7 @@ sub hadoop_partsort {
   sort {hadoop_partfile_n($a) <=> hadoop_partfile_n($b)} @_
 }
 
-sub hadoop_matched_partfile {
+sub hadoop_matched_partfiles {
   my ($path, $partfile) = @_;
   my @left_files    = hadoop_partsort hadoop_ls $ENV{mapred_input_dir};
   my @possibilities = hadoop_partsort hadoop_ls $path;
@@ -538,7 +538,7 @@ sub hadoop_matched_partfile {
             || $partfile_n == hadoop_partfile_n $partfile;
   }
 
-  die "hadoop_matched_partfile couldn't find the index of the specified "
+  die "hadoop_matched_partfiles couldn't find the index of the specified "
     . "partfile ($partfile) within the list of map inputs (@left_files)"
   if $n >= @left_files;
 
@@ -562,7 +562,9 @@ sub hadoop_matched_partfile {
                   "hdfsjoin $path", "redundancy", $left_redundancy;
   }
 
-  "hdfs:{" . join(',', map s/^hdfs://r, @files_to_read) . "}";
+  # Emit a pattern that hadoop fs -ls will know how to expand.
+  my @basenames = map s/^.*\///r, @files_to_read;
+  "hdfs:$path/{" . join(',', @basenames) . "}";
 }
 
 sub hadoop_tempfile {
