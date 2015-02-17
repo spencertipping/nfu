@@ -661,13 +661,19 @@ sub hadoop_into {
   my $transformed_mapper  = $mapper  =~ s|\Q$dirname\E|./|gr;
   my $transformed_reducer = $reducer =~ s|\Q$dirname\E|./|gr;
 
+  my $jobname = "nfu streaming ["
+              . join(' ', grep $_ ne '-input', @input_files)
+              . "]: $transformed_mapper, $transformed_reducer"
+              . " > $outfile";
+
   my $hadoop_command =
     hadoop('jar', $streaming_jar,
            @self_dep,
            @input_files,
            '-output',  $outfile,
            '-mapper',  $transformed_mapper,
-           '-reducer', $transformed_reducer) . $extra_args;
+           '-reducer', $transformed_reducer,
+           '-D',       "mapred.job.name=$jobname") . $extra_args;
 
   system $hadoop_command . ' 1>&2'
     and die "failed to execute hadoop command $hadoop_command: $!";
