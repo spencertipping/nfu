@@ -88,6 +88,7 @@ sub jd {json_decode @_}
 
 # File functions
 sub hadoop_ls;
+sub hadoop_matched_partfile;
 sub expand_filename_shorthands {
   # NB: we prepend a shell comment containing the original $f so anyone
   # downstream can get it back. This is currently used by Hadoop to reuse data
@@ -117,6 +118,11 @@ sub expand_filename_shorthands {
     # Use Hadoop commands to read stuff
     my $fs = join ' ', map shell_quote($_), hadoop_ls $f;
     $result = "${original}hadoop fs -text $fs |";
+  } elsif ($f =~ s/^hdfsjoin://) {
+    # Mapside join against corresponding partfile(s)
+    $result = $original
+            . expand_filename_shorthands(
+                hadoop_matched_partfiles $f, $ENV{map_input_file});
   } elsif ($f =~ s/^perl://) {
     # Evaluate a Perl expression
     $f =~ s/'/'"'"'/g;
@@ -503,6 +509,34 @@ sub hadoop_ls {
              . " | sed 1d"
              . " | perl -wlne 'print \"hdfs:\" . +(split \" \",\$_,8)[7]'";
   grep /\/[^_][^\/]*$/, split /\n/, join '', qx/$ls_command/;
+}
+
+sub gcd {
+  my ($a, $b) = @_;
+  while ($b) {
+    if ($a > $b) { ($a, $b) = ($b, $a) }
+    else         { $b = $a % $b }
+  }
+  $a;
+}
+
+sub hadoop_partfile_n { $1 if $_[0] =~ /[^0-9]([0-9]+)$/ }
+sub hadoop_matched_partfile {
+  my ($path, $partfile) = @_;
+  my @left_files    = hadoop_ls $ENV{mapred_input_dir};
+  my @possibilities = hadoop_ls $path;
+
+  my $n = hadoop_partfile_n $partfile;
+
+  # In most cases we'll have the same number of partfiles on each side.
+  if (@left_files == @possibilities) {
+    my @matched = grep $n == hadoop_partfile_n $_, @possibilities;
+    "hdfs:" . join(',', @matched);
+  } else {
+    die "hadoop_matched_partfile cannot yet handle joins across different "
+      . "numbers of shards (this will be fixed at some point); left side has "
+      . scalar(@left_files) . " and right has " . scalar(@possibilities);
+  }
 }
 
 sub hadoop_tempfile {
