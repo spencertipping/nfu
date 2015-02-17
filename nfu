@@ -100,10 +100,16 @@ sub expand_filename_shorthands {
     $result = $piped =~ /\|/ ? "$piped |" : $piped;
   } elsif ($f =~ s/^(?:http(s?):)?\/\//"http" . ($1 || '') . ":\/\/"/e) {
     # Assume a URL and curl it
-    $result = "curl $f |";
+    $result = "curl '$f' |";
   } elsif ($f =~ s/^sh://) {
     # Execute a command and capture stdout
     $result = "$f |";
+  } elsif ($f =~ s/^hdfs://) {
+    # Use Hadoop commands to read stuff
+    # NB: don't use real shell-quoting here because this will break the
+    # filename expansion reverse engineering happening in the hadoop logic.
+    # Search for this tag: HDFS_REVERSE_ENGINEERING_HACK
+    $result = "hadoop fs -text '$f' |";
   } elsif ($f =~ s/^perl://) {
     # Evaluate a Perl expression
     $f =~ s/'/'"'"'/g;
@@ -168,8 +174,10 @@ END {
 # arguments. This is required for --pmap to work correctly.
 my @uses;
 
-sub quote_self {join ' ', $0,
-                map {/[^-\w]/ ? "'" . s/'/'\\''/gr . "'" : $_} @_}
+sub shell_quote {$_[0] =~ /[^-\/\w]/ ? "'" . ($_[0] =~ s/'/'\\''/gr) . "'"
+                                     : $_[0]}
+
+sub quote_self {join ' ', $0, map shell_quote($_), @_}
 
 my %explosions = (
   a => '--average',
@@ -255,6 +263,8 @@ my %arity = (
   preview    => 0,
   pipe       => 1,
   entropy    => 0,
+  hadoop     => 2,
+  hadoopinto => 3,
 );
 
 my %usages = (
@@ -304,6 +314,8 @@ my %usages = (
   preview    => '',
   pipe       => 'shell command to pipe through',
   entropy    => 'running entropy of relative probabilities/frequencies',
+  hadoop     => 'hadoop streaming: map cmd, reduce cmd',
+  hadoopinto => 'hadoop streaming into HDFS: map cmd, reduce cmd, outfile',
 );
 
 my %env_docs = (
@@ -313,6 +325,10 @@ my %env_docs = (
   NFU_NO_PAGER         => 'if set, nfu will not use "less" to preview stdout',
   NFU_PMAP_PARALLELISM => 'number of subprocesses for -M',
   NFU_MAX_FILEHANDLES  => 'default 64; maximum #subprocesses for --partition',
+  NFU_HADOOP_STREAMING => 'absolute location of hadoop-streaming.jar',
+  NFU_HADOOP_OPTIONS   => '-D options for hadoop streaming jobs',
+  NFU_HADOOP_COMMAND   => 'hadoop executable; e.g. hadoop jar, hadoop fs -ls',
+  NFU_HADOOP_TMPDIR    => 'default /tmp; temp dir for hadoop uploads',
 );
 
 my %gnuplot_aliases = (
@@ -386,7 +402,8 @@ sub stateful_unary_fn {
 }
 
 sub exec_with_stdin {
-  open(my $fh, '|' . join(' ', map {"'$_'"} @_)) or die "failed to exec @_";
+  open my $fh, '|' . join ' ', map shell_quote($_), @_
+    or die "failed to exec @_";
   be_verbose_as_appropriate(length), print $fh $_ while <>;
   close $fh;
 }
@@ -440,6 +457,136 @@ sub fifo_for {
 
   unlink $fifo_name or warn "failed to unlink temporary fifo $fifo_name: $!";
   exit 0;
+}
+
+sub hadoop {
+  # Generates a hadoop command string, quoting all args as necessary
+  join ' ', $ENV{NFU_HADOOP_COMMAND} // "hadoop", map shell_quote($_), @_;
+}
+
+sub hadoop_tempfile {
+  # 128 bits of random data
+  my $randomness = join '', map sprintf('%04x', rand 65536), 0 .. 8;
+  my $dir        = $ENV{NFU_HADOOP_TMPDIR} // '/tmp';
+  "$dir/nfu-hadoop-$ENV{USER}-$randomness";
+}
+
+sub find_hadoop_streaming {
+  print STDERR "\n";
+  print STDERR "nfu: locating Hadoop streaming jar manually\n";
+  print STDERR "     if this fails, set NFU_HADOOP_STREAMING to the jar.\n";
+  print STDERR "\n";
+
+  my $jar = (read_lines 'locate "*hadoop-streaming.jar*" |')[0];
+  die "failed to locate hadoop streaming jar automatically; "
+    . "you should set NFU_HADOOP_STREAMING" unless $jar;
+  print STDERR "     found $jar\n";
+  $jar;
+}
+
+sub hadoop_into {
+  die "hadoop_into got (@_) but expected (mapper, reducer, outfile)"
+    unless @_ == 3;
+
+  my ($mapper, $reducer, $outfile) = @_;
+  my $streaming_jar = $ENV{NFU_HADOOP_STREAMING} // find_hadoop_streaming;
+
+  my @input_files;
+  my @delete_afterwards;
+
+  # Figure out where our input seems to be coming from. This is a little hacky,
+  # but I think it's worthwhile for the flexibility we get.
+  #
+  # Hadoop jobs output their list of output partfile names because the data is
+  # often too large. It's possible we'll get one of these as stdin, so each
+  # line will look like "hdfs:/...". In that case, we want to use each as an
+  # input file. Otherwise we'll want to upload stdin and all non-HDFS files to
+  # HDFS and use those.
+  #
+  # It's actually a bit tricky to figure out which files started out as hdfs:
+  # locations because by now they've all been filename alias-expanded. We need
+  # to reverse-engineer the alias if we want to reuse stuff already on HDFS.
+
+  # HDFS_REVERSE_ENGINEERING_HACK
+  my $hdfs_template = expand_filename_shorthands("hdfs:XXX") =~ s/XXX/([^']+)/r;
+  my $hdfs_pattern  = qr/$hdfs_template/;
+
+  my @other_argv;
+  while (@ARGV) {
+    local $_ = shift @ARGV;
+    if (s/$hdfs_pattern/$1/) {
+      push @input_files, '-input', $_;
+    } else {
+      push @other_argv, $_;
+    }
+  }
+
+  @ARGV = @other_argv;
+  my $line = undef;
+  unless (-t STDIN) {
+    chomp, push @input_files, '-input', $_
+    while ($line = <STDIN>) =~ s/^hdfs://;
+  }
+
+  # At this point $line is either undefined or contains a line we shouldn't
+  # have read from stdin (i.e. it's data). If the latter, prepend it to the
+  # upload to HDFS.
+  if (defined $line) {
+    my $tempfile = hadoop_tempfile;
+    open my $fh, "| " . hadoop('fs', '-put', '-', $tempfile)
+      or die "failed to open hadoop fs -put process for uploading: $!";
+    print $fh $line;
+    be_verbose_as_appropriate(length), print $fh $_ while <STDIN>;
+    close $fh;
+
+    push @input_files,       '-input', $tempfile;
+    push @delete_afterwards, $tempfile;
+  }
+
+  if (@other_argv) {
+    my $tempfile = hadoop_tempfile;
+    open my $fh, "| " . hadoop('fs', '-put', '-', $tempfile)
+      or die "failed to open hadoop fs -put process for uploading: $!";
+    be_verbose_as_appropriate(length), print $fh $_ while <>;
+    close $fh;
+
+    push @input_files,       '-input', $tempfile;
+    push @delete_afterwards, $tempfile;
+  }
+
+  # Now all the input files are in place, so we can kick off the job.
+  my $extra_args = $ENV{NFU_HADOOP_OPTIONS} // '';
+  my @self_dep   = ('-file', $0);
+  my $dirname    = $0 =~ s/\/nfu$//r;
+
+  # We're uploading ourselves, so we'll need a current-directory reference to
+  # nfu. When nfu quotes itself, it produces an absolute path instead; this
+  # code rewrites those into ./nfu.
+  my $transformed_mapper  = $mapper  =~ s|\Q$dirname\E|./|gr;
+  my $transformed_reducer = $reducer =~ s|\Q$dirname\E|./|gr;
+
+  my $hadoop_command =
+    hadoop('jar', $streaming_jar,
+           @self_dep,
+           @input_files,
+           '-output',  $outfile,
+           '-mapper',  $transformed_mapper,
+           '-reducer', $transformed_reducer) . $extra_args;
+
+  system $hadoop_command
+    and die "failed to execute hadoop command $hadoop_command: $!";
+
+  for (@delete_afterwards) {
+    print STDERR "nfu: cleaning up tempfile $_\n";
+    system hadoop('fs', '-rm', '-r', $_);
+  }
+
+  # Now get the output file listing. This is a huge mess because Hadoop is a
+  # huge mess.
+  my $ls_command = hadoop('fs', '-ls', $outfile)
+             . " | sed 1d"
+             . " | perl -wlne 'print \"hdfs:\" . +(split \" \",\$_,8)[7]'";
+  split /\n/, qx/$ls_command/;
 }
 
 my %functions = (
@@ -947,6 +1094,18 @@ my %functions = (
     close for values %fhs;
   },
 
+  hadoop => sub {
+    print "$_\n" for hadoop_into @_, hadoop_tempfile;
+  },
+
+  hadoopcat => sub {
+    my $filename = hadoop_tempfile;
+    system hadoop('fs', '-text', s/^hdfs://r) for hadoop_into @_, $filename;
+    system hadoop('fs', '-rm', '-r', $filename);
+  },
+
+  hadoopinto => sub {printf "hdfs:$_\n" for hadoop_into @_},
+
   preview => sub {
     my $have_less = !system 'which less > /dev/null';
     my $have_more = !system 'which more > /dev/null';
@@ -1032,63 +1191,54 @@ if (@ARGV && $ARGV[0] =~ /^--expand/) {
   } elsif ($command =~ /-gnuplot$/) {
     print expand_gnuplot_options($x), "\n";
   } else {
-    print STDERR "unknown command: $command\n";
+    print STDERR "unknown expansion command: $command\n";
     exit 1;
   }
   exit 0;
 }
+
+my $reader        = undef;
+my @parsed        = ();
+my $explain       = 0;
+my @args_to_parse = @ARGV;
+
+@ARGV = ();
 
 sub explode {
   return $_[0] unless $_[0] =~ s/^-([^-])/$1/;
   map {$explosions{$_} // $_} grep length, split /([-+.\d]*),?/, $_[0];
 }
 
-my @exploded;
-while (@ARGV) {
-  # Load 'use' modules before any forking.
-  if ($ARGV[0] =~ /^--(use|run)$/) {
-    my $option = shift @ARGV;
-    my $x      = shift @ARGV;
-
-    push @uses, $option, $x;
-    if ($option eq '--run') {
-      eval $x;
-      die "failed to run $x: $@" if $@;
-    } else {
-      do $x;
-      die "failed to use $x: $@" if $@;
-    }
-  } elsif (!$verbose && $ARGV[0] =~ /^--?v(erbose)?$/) {
-    shift @ARGV;
-    print STDERR "\033[2J";
-    $verbose = 1;
-  } else {
-    push @exploded, explode shift @ARGV;
-  }
-}
-
-my $reader  = undef;
-my @parsed  = ();
-my $explain = 0;
-
-@ARGV = ();
-
 # First parse through all of the options, pull out stray files, and replace
 # @ARGV. This enables <> in the worker subs. (The "right way" to do this would
 # be to chain the commands' inputs; then I could remove the branch in the
 # for-loop below. But I'm too lazy.)
-while (@exploded) {
-  (my $command = shift @exploded) =~ s/^--//;
+while (@args_to_parse) {
+  unshift @args_to_parse, explode shift @args_to_parse;
+  (my $command = shift @args_to_parse) =~ s/^--//;
 
   if (defined(my $arity = $arity{$command})) {
     my @args;
-    push @args, shift @exploded while @exploded
-                                   && (--$arity >= 0
-                                       || ! -e $exploded[0]
-                                          && $exploded[0] =~ /^[-+]?\d+/);
+    push @args, shift @args_to_parse
+    while @args_to_parse && (--$arity >= 0
+                             || ! -e $args_to_parse[0]
+                                && $args_to_parse[0] =~ /^[-+]?\d+/);
     push @parsed, [$command, @args];
+  } elsif ($command eq 'run') {
+    my $x = shift @args_to_parse;
+    push @uses, 'run', $x;
+    eval $x;
+    die "failed to run '$x': $@" if $@;
+  } elsif ($command eq 'use') {
+    my $x = shift @args_to_parse;
+    push @uses, 'use', $x;
+    eval read_file $x;          # instead of 'do' so we get shorthands
+    die "failed to use '$x': $@" if $@;
   } elsif ($command eq 'explain') {
     $explain = 1;
+  } elsif ($command eq 'verbose' || $command eq 'v') {
+    print STDERR "\033[2J";
+    $verbose = 1;
   } else {
     my $f = expand_filename_shorthands $command;
     die "nonexistent pseudofile: $command" unless defined $f;
