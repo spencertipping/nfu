@@ -546,8 +546,22 @@ sub hadoop_matched_partfile {
   # means that the Kth of N files contains all keys for which H(key) % N == K.
   my $reduction_factor = gcd scalar(@left_files), scalar(@possibilities);
   my $left_redundancy  = @possibilities / $reduction_factor;
-  my @files_to_read    = @possibilities[map $_ * $reduction_factor + $n,
+  my @files_to_read    = @possibilities[map $_ * $reduction_factor
+                                          + $n % $reduction_factor,
                                             0 .. $left_redundancy - 1];
+
+  # Log some stuff to job counters so any problems are more evident.
+  if ($verbose) {
+    printf STDERR "hdfsjoin:$path [$partfile] (inferred partfile $n): %s\n",
+                  join(' ', @files_to_read);
+
+    printf STDERR "reporter:counter:%s,%s,%d\n",
+                  "hdfsjoin $path", "joins attempted", 1;
+
+    printf STDERR "reporter:counter:%s,%s,%d\n",
+                  "hdfsjoin $path", "redundancy", $left_redundancy;
+  }
+
   "hdfs:{" . join(',', map s/^hdfs://r, @files_to_read) . "}";
 }
 
