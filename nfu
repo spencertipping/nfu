@@ -527,7 +527,7 @@ sub hadoop_into {
   @ARGV = @other_argv;
   my $line = undef;
   unless (-t STDIN) {
-    chomp, push @input_files, '-input', $_
+    chomp($line), push @input_files, '-input', $line
     while ($line = <STDIN>) =~ s/^hdfs://;
   }
 
