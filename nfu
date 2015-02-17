@@ -520,8 +520,10 @@ sub gcd {
   $a;
 }
 
-sub hadoop_partfile_n { $1 if $_[0] =~ /[^0-9]([0-9]+)(?:\.[^\/]+)?$/ }
-sub hadoop_partsort { sort {hadoop_partfile_n $a <=> hadoop_partfile_n $b} @_ }
+sub hadoop_partfile_n { $_[0] =~ /[^0-9]([0-9]+)(?:\.[^\/]+)?$/ ? $1 : 0 }
+sub hadoop_partsort {
+  sort {hadoop_partfile_n($a) <=> hadoop_partfile_n($b)} @_
+}
 
 sub hadoop_matched_partfile {
   my ($path, $partfile) = @_;
