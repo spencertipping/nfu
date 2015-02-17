@@ -521,22 +521,32 @@ sub gcd {
 }
 
 sub hadoop_partfile_n { $1 if $_[0] =~ /[^0-9]([0-9]+)(?:\.[^\/]+)?$/ }
+sub hadoop_partsort { sort {hadoop_partfile_n $a <=> hadoop_partfile_n $b} @_ }
+
 sub hadoop_matched_partfile {
   my ($path, $partfile) = @_;
-  my @left_files    = hadoop_ls $ENV{mapred_input_dir};
-  my @possibilities = hadoop_ls $path;
+  my @left_files    = hadoop_partsort hadoop_ls $ENV{mapred_input_dir};
+  my @possibilities = hadoop_partsort hadoop_ls $path;
 
   my $n = hadoop_partfile_n $partfile;
-
-  # In most cases we'll have the same number of partfiles on each side.
-  if (@left_files == @possibilities) {
-    my @matched = grep $n == hadoop_partfile_n($_), @possibilities;
-    "hdfs:" . join(',', @matched);
-  } else {
-    die "hadoop_matched_partfile cannot yet handle joins across different "
-      . "numbers of shards (this will be fixed at some point); left side has "
-      . scalar(@left_files) . " and right has " . scalar(@possibilities);
+  unless ($n < @left_files && $left_files[$n] eq $partfile) {
+    my $partfile_n = $n;
+    $n = 0;
+    ++$n until $n >= @left_files
+            || $partfile_n == hadoop_partfile_n $partfile;
   }
+
+  die "hadoop_matched_partfile couldn't find the index of the specified "
+    . "partfile ($partfile) within the list of map inputs (@left_files)"
+  if $n >= @left_files;
+
+  # Assume Hadoop's default partitioning strategy using hashcode modulus. This
+  # means that the Kth of N files contains all keys for which H(key) % N == K.
+  my $reduction_factor = gcd scalar(@left_files), scalar(@possibilities);
+  my $left_redundancy  = @possibilities / $reduction_factor;
+  my @files_to_read    = @possibilities[map $_ * $reduction_factor + $n,
+                                            0 .. $left_redundancy - 1];
+  "hdfs:" . join(',', @files_to_read);
 }
 
 sub hadoop_tempfile {
