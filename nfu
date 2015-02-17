@@ -122,7 +122,7 @@ sub expand_filename_shorthands {
     # Mapside join against corresponding partfile(s)
     $result = $original
             . expand_filename_shorthands(
-                hadoop_matched_partfiles $f, $ENV{map_input_file});
+                hadoop_matched_partfile $f, $ENV{map_input_file});
   } elsif ($f =~ s/^perl://) {
     # Evaluate a Perl expression
     $f =~ s/'/'"'"'/g;
