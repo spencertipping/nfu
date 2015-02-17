@@ -1139,7 +1139,7 @@ if (@ARGV ? $ARGV[0] =~ /^-[h?]$/ || $ARGV[0] =~ /^--(usage|help)$/
   print STDERR "     --expand-gnuplot    <gnuplot options>\n";
 
   print STDERR "\n  pipeline modifiers:\n";
-  print STDERR "     --quote  -- quotes args: eval \$(nfu --quote ...)\n";
+  print STDERR "     --quote  -- quotes args: eval \$(nfu -Q|--quote ...)\n";
   print STDERR "     --use    <file.pl>\n";
   print STDERR "     --run    <perl code>\n";
 
@@ -1176,9 +1176,9 @@ if (@ARGV ? $ARGV[0] =~ /^-[h?]$/ || $ARGV[0] =~ /^--(usage|help)$/
   exit 1;
 }
 
-if (@ARGV && $ARGV[0] eq '--quote') {
+if (@ARGV and $ARGV[0] eq '--quote' || $ARGV[0] =~ s/^-Q/-/) {
   # Quote all other arguments so a shell will parse them correctly.
-  shift @ARGV;
+  shift @ARGV if $ARGV[0] eq '--quote';
   print quote_self(@ARGV), "\n";
   exit 0;
 }
