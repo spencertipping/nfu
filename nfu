@@ -509,7 +509,7 @@ sub hadoop_ls {
   # http://stackoverflow.com/questions/21569172/how-to-list-only-file-name-in-hdfs
   my $ls_command = hadoop('fs', '-ls', $_[0])
              . " | grep -v '^Found'"
-             . " | perl -wlne 'print \"hdfs:\" . +(split \" \",\$_,8)[7]'";
+             . " | perl -wlne 'print +(split \" \",\$_,8)[7]'";
   grep /\/[^_][^\/]*$/, split /\n/, join '', qx/$ls_command/;
 }
 
@@ -679,7 +679,7 @@ sub hadoop_into {
     and die "failed to execute hadoop command $hadoop_command: $!";
 
   system hadoop('fs', '-rm', '-r', @delete_afterwards) . ' 1>&2';
-  hadoop_ls $outfile;
+  map "hdfs:$_", hadoop_ls $outfile;
 }
 
 my %functions = (
