@@ -681,7 +681,8 @@ sub hadoop_into {
   system $hadoop_command . ' 1>&2'
     and die "failed to execute hadoop command $hadoop_command: $!";
 
-  system hadoop('fs', '-rm', '-r', @delete_afterwards) . ' 1>&2';
+  system hadoop('fs', '-rm', '-r', @delete_afterwards) . ' 1>&2'
+    if @delete_afterwards;
   map "hdfs:$_", hadoop_ls $outfile;
 }
 
