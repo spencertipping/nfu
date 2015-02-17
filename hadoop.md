@@ -51,6 +51,29 @@ HDFS data to process locally:
 $ nfu hdfs:/path/to/data -gc
 ```
 
+## Mapside joins
+You can use nfu's `--index`, `--indexouter`, `--join`, and `--joinouter`
+functions to join arbitrary data on HDFS. Because HDFS data is often large and
+consistently partitioned, nfu provides a `hdfsjoin:path` pseudofile that
+assumes Hadoop default partitioning and expands into a list of partfiles
+sufficient to cover all keys that coincide with the current mapper's data.
+Here's an example of how you might use it:
+
+```sh
+# take 10000 words at random and generate [word, length] in /tmp/nfu-jointest
+# NB: you need a reducer here (even though it's a no-op); otherwise Hadoop
+# won't partition your mapper outputs.
+$ nfu sh:'shuf /usr/share/dict/words' \
+  --take 10000 \
+  --hadoopinto "$(nfu -Qvm 'row %0, length %0')" \
+               "$(nfu -Qv)" \
+               /tmp/nfu-jointest
+
+# now inner-join against that data
+$ nfu /usr/share/dict/words \
+  --hadoopcat "$(nfu -Qvi0 hdfsjoin:/tmp/nfu-jointest)" NONE
+```
+
 ## Examples
 ### Word count
 ```sh
