@@ -479,11 +479,11 @@ sub find_hadoop_streaming {
   print STDERR "     if this fails, set NFU_HADOOP_STREAMING to the jar.\n";
   print STDERR "\n";
 
-  my $jar = (read_lines 'locate "*hadoop-streaming.jar*" |')[0];
+  my @files = qx|locate "*hadoop-streaming.jar*"|;
   die "failed to locate hadoop streaming jar automatically; "
-    . "you should set NFU_HADOOP_STREAMING" unless $jar;
-  print STDERR "     found $jar\n";
-  $jar;
+    . "you should set NFU_HADOOP_STREAMING" unless @files;
+  print STDERR "     found $files[0]\n";
+  $files[0];
 }
 
 sub hadoop_into {
