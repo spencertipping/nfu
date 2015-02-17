@@ -511,7 +511,7 @@ sub hadoop_into {
 
   # HDFS_REVERSE_ENGINEERING_HACK
   my $hdfs_template = expand_filename_shorthands("hdfs:XXX", 1)
-                    =~ s/^(.*)XXX(.*)$/^\\Q$1\\E([^'|]+)\\Q$2\\E$/r;
+                    =~ s/^(.*)XXX(.*)$/^\\Q$1\\E([^'|]+)\\Q$2\\E\$/r;
 
   my $hdfs_pattern  = qr/$hdfs_template/;
 
