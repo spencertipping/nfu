@@ -128,8 +128,11 @@ sub expand_filename_shorthands {
     $f =~ s/'/'"'"'/g;
     $result = "${original}perl -e 'print \$_, \"\\n\" for ($f)' |";
   } elsif ($f =~ /(\w*@?[^:]+):(.*)$/) {
-    # Access file over SSH
-    $result = "${original}ssh -C '$1' cat '$2' |";
+    # Access file over SSH. We need to make sure nfu is running on the remote
+    # end, since the remote file might be gzipped or some such. Because the
+    # remote machine might not have nfu, this involves us piping ourselves over
+    # to that machine.
+    $result = "${original}cat '$0' | ssh -C '$1' perl - '$2' |";
   } else {
     return undef;
   }
