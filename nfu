@@ -474,15 +474,10 @@ sub hadoop_tempfile {
 }
 
 sub find_hadoop_streaming {
-  print STDERR "\n";
-  print STDERR "nfu: locating Hadoop streaming jar manually\n";
-  print STDERR "     if this fails, set NFU_HADOOP_STREAMING to the jar.\n";
-  print STDERR "\n";
-
   my @files = split /\n/, join '', qx|locate "*hadoop-streaming.jar*"|;
   die "failed to locate hadoop streaming jar automatically; "
     . "you should set NFU_HADOOP_STREAMING" unless @files;
-  print STDERR "     found $files[0]\n";
+  print STDERR "nfu found hadoop streaming jar: $files[0]\n";
   $files[0];
 }
 
