@@ -1200,7 +1200,7 @@ my %functions = (
     system hadoop('fs', '-rm', '-r', $filename) . ' 1>&2';
   },
 
-  hadoopinto => sub {printf "hdfs:$_\n" for hadoop_into @_},
+  hadoopinto => sub {printf "$_\n" for hadoop_into @_},
 
   preview => sub {
     my $have_less = !system 'which less > /dev/null';
