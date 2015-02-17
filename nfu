@@ -500,7 +500,9 @@ sub fifo_for {
 
 sub hadoop {
   # Generates a hadoop command string, quoting all args as necessary
-  join ' ', $ENV{NFU_HADOOP_COMMAND} // "hadoop", map shell_quote($_), @_;
+  join ' ', $ENV{NFU_HADOOP_COMMAND} // "hadoop",
+            @_[0, 1],
+            map shell_quote($_), @_ > 2 ? @_[2..$#_] : ();
 }
 
 sub hadoop_ls {
@@ -667,13 +669,14 @@ sub hadoop_into {
               . " > $outfile";
 
   my $hadoop_command =
-    hadoop('jar', $streaming_jar,
+    hadoop('jar',
+           "-D mapred.job.name=" . shellquote($jobname) . " $extra_args",
+           $streaming_jar,
            @self_dep,
            @input_files,
            '-output',  $outfile,
            '-mapper',  $transformed_mapper,
-           '-reducer', $transformed_reducer,
-           '-D',       "mapred.job.name=$jobname") . $extra_args;
+           '-reducer', $transformed_reducer);
 
   system $hadoop_command . ' 1>&2'
     and die "failed to execute hadoop command $hadoop_command: $!";
