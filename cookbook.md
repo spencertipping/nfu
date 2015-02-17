@@ -54,3 +54,11 @@ to the contents of `file2` before joining (`-i0 file1-by-id`) to get the
 combined inner join, `id, file1-name, file2-name`. Perl's `ne` operator returns
 zero for equal strings and 1 for unequal strings, so we use `-s` to sum the 1's
 up, taking just the last record to get the total.
+
+## Compressing field values into a dense integer range
+I had a bunch of rows, each of the form `UUID, lat, lng` (with repeated UUIDs),
+and I wanted the UUIDs to be integers so I could 3D-plot the coordinates.
+
+```sh
+$ nfu data -gm 'row $::n{%0} //= $::i++, %1, %2' --splot
+```
