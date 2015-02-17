@@ -212,7 +212,7 @@ END {
 
 # This variable will keep track of any state accumulated from --use or --run
 # arguments. This is required for --pmap to work correctly.
-my @uses;
+my @evaled_code;
 
 sub shell_quote {$_[0] =~ /[^-\/\w]/ ? "'" . ($_[0] =~ s/'/'\\''/gr) . "'"
                                      : $_[0]}
@@ -1045,7 +1045,7 @@ my %functions = (
     my $i     = 0;
 
     for (1 .. $ENV{NFU_PMAP_PARALLELISM} // 16) {
-      my $mapper = quote_self @uses, '--map', $_[0];
+      my $mapper = quote_self map(('--run', $_), @evaled_code), '--map', $_[0];
       open my $fh, "| $mapper"
         or die "failed to open child process $mapper: $!";
 
@@ -1275,13 +1275,6 @@ if (@ARGV ? $ARGV[0] =~ /^-[h?]$/ || $ARGV[0] =~ /^--(usage|help)$/
   exit 1;
 }
 
-if (@ARGV and $ARGV[0] eq '--quote' || $ARGV[0] =~ s/^-Q/-/) {
-  # Quote all other arguments so a shell will parse them correctly.
-  shift @ARGV if $ARGV[0] eq '--quote' || $ARGV[0] eq '-';
-  print quote_self(@ARGV), "\n";
-  exit 0;
-}
-
 if (@ARGV && $ARGV[0] =~ /^--expand/) {
   my ($command, $x, @others) = @ARGV;
   if ($command =~ /-pseudofile$/) {
@@ -1313,6 +1306,7 @@ sub explode {
 # @ARGV. This enables <> in the worker subs. (The "right way" to do this would
 # be to chain the commands' inputs; then I could remove the branch in the
 # for-loop below. But I'm too lazy.)
+my $quote_self = 0;
 while (@args_to_parse) {
   unshift @args_to_parse, explode shift @args_to_parse;
   (my $command = shift @args_to_parse) =~ s/^--//;
@@ -1326,24 +1320,35 @@ while (@args_to_parse) {
     push @parsed, [$command, @args];
   } elsif ($command eq 'run') {
     my $x = shift @args_to_parse;
-    push @uses, 'run', $x;
+    push @evaled_code, $x;
     eval $x;
     die "failed to run '$x': $@" if $@;
   } elsif ($command eq 'use') {
     my $x = shift @args_to_parse;
-    push @uses, 'use', $x;
-    eval read_file $x;          # instead of 'do' so we get shorthands
+    my $s = read_file $x;
+    push @evaled_code, $s;
+    eval $s;
     die "failed to use '$x': $@" if $@;
   } elsif ($command eq 'explain') {
     $explain = 1;
   } elsif ($command eq 'verbose' || $command eq 'v') {
     print STDERR "\033[2J";
     $verbose = 1;
+  } elsif ($command eq 'quote' || $command eq 'Q') {
+    $quote_self = 1;
   } else {
     my $f = expand_filename_shorthands $command;
     die "nonexistent pseudofile: $command" unless defined $f;
     push @ARGV, $f;
   }
+}
+
+if ($quote_self) {
+  # Quote all other arguments so a shell will parse them correctly.
+  print quote_self(map(('--run', $_), @evaled_code),
+                   map(("--$$_[0]", @$_[1..$#$_]), @parsed),
+                   @ARGV), "\n";
+  exit 0;
 }
 
 # Open output in an interactive previewer if...
