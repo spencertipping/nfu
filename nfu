@@ -536,7 +536,7 @@ sub hadoop_into {
   # upload to HDFS.
   if (defined $line) {
     my $tempfile = hadoop_tempfile;
-    open my $fh, "| " . hadoop('fs', '-put', '-', $tempfile)
+    open my $fh, "| " . hadoop('fs', '-put', '-', $tempfile) . ' 1>&2'
       or die "failed to open hadoop fs -put process for uploading: $!";
     print $fh $line;
     be_verbose_as_appropriate(length), print $fh $_ while <STDIN>;
@@ -548,7 +548,7 @@ sub hadoop_into {
 
   if (@other_argv) {
     my $tempfile = hadoop_tempfile;
-    open my $fh, "| " . hadoop('fs', '-put', '-', $tempfile)
+    open my $fh, "| " . hadoop('fs', '-put', '-', $tempfile) . ' 1>&2'
       or die "failed to open hadoop fs -put process for uploading: $!";
     be_verbose_as_appropriate(length), print $fh $_ while <>;
     close $fh;
@@ -579,10 +579,7 @@ sub hadoop_into {
   system $hadoop_command . ' 1>&2'
     and die "failed to execute hadoop command $hadoop_command: $!";
 
-  for (@delete_afterwards) {
-    print STDERR "nfu: cleaning up tempfile $_\n";
-    system hadoop('fs', '-rm', '-r', $_);
-  }
+  system hadoop('fs', '-rm', '-r', @delete_afterwards) . ' 1>&2';
 
   # Now get the output file listing. This is a huge mess because Hadoop is a
   # huge mess.
@@ -1105,7 +1102,7 @@ my %functions = (
   hadoopcat => sub {
     my $filename = hadoop_tempfile;
     system hadoop('fs', '-text', map s/^hdfs://r, hadoop_into @_, $filename);
-    system hadoop('fs', '-rm', '-r', $filename);
+    system hadoop('fs', '-rm', '-r', $filename) . ' 1>&2';
   },
 
   hadoopinto => sub {printf "hdfs:$_\n" for hadoop_into @_},
