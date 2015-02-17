@@ -1103,7 +1103,7 @@ my %functions = (
 
   hadoopcat => sub {
     my $filename = hadoop_tempfile;
-    system hadoop('fs', '-text', s/^hdfs://r) for hadoop_into @_, $filename;
+    system hadoop('fs', '-text', map s/^hdfs://r, hadoop_into @_, $filename);
     system hadoop('fs', '-rm', '-r', $filename);
   },
 
