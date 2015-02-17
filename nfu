@@ -576,7 +576,7 @@ sub hadoop_into {
            '-mapper',  $transformed_mapper,
            '-reducer', $transformed_reducer) . $extra_args;
 
-  system $hadoop_command
+  system $hadoop_command . ' 1>&2'
     and die "failed to execute hadoop command $hadoop_command: $!";
 
   for (@delete_afterwards) {
@@ -589,7 +589,7 @@ sub hadoop_into {
   my $ls_command = hadoop('fs', '-ls', $outfile)
              . " | sed 1d"
              . " | perl -wlne 'print \"hdfs:\" . +(split \" \",\$_,8)[7]'";
-  split /\n/, qx/$ls_command/;
+  grep /\/[^_][^\/]*$/, split /\n/, qx/$ls_command/;
 }
 
 my %functions = (
