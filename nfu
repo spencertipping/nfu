@@ -87,9 +87,17 @@ sub je {json_encode @_}
 sub jd {json_decode @_}
 
 # File functions
+sub hadoop_ls;
 sub expand_filename_shorthands {
+  # NB: we prepend a shell comment containing the original $f so anyone
+  # downstream can get it back. This is currently used by Hadoop to reuse data
+  # stored on HDFS if you write it on the command-line. (Otherwise nfu would
+  # hadoop fs -text to download it, then re-upload to a tempfile.)
+
   my ($f, $always_make_a_command) = @_;
   my $result;
+  my $original = "#$f\n";
+
   if (-e $f) {
     # It's really a filename, so push it onto @ARGV. If it's compressed, run it
     # through the appropriate decompressor first.
@@ -97,32 +105,36 @@ sub expand_filename_shorthands {
                    =~ s/^(.*\.bz2)/cat '$1' | bzip -d/ri
                    =~ s/^(.*\.xz)/cat '$1' | xz -d/ri
                    =~ s/^(.*\.lzo)/cat '$1' | lzop -d/ri;
-    $result = $piped =~ /\|/ ? "$piped |" : $piped;
+    $result = $piped =~ /\|/ ? "$original$piped |" : $piped;
   } elsif ($f =~ s/^(?:http(s?):)?\/\//"http" . ($1 || '') . ":\/\/"/e) {
     # Assume a URL and curl it
-    $result = "curl '$f' |";
+    $f = shell_quote $f;
+    $result = "${original}curl $f |";
   } elsif ($f =~ s/^sh://) {
     # Execute a command and capture stdout
-    $result = "$f |";
+    $result = "$original$f |";
   } elsif ($f =~ s/^hdfs://) {
     # Use Hadoop commands to read stuff
-    # NB: don't use real shell-quoting here because this will break the
-    # filename expansion reverse engineering happening in the hadoop logic.
-    # Search for this tag: HDFS_REVERSE_ENGINEERING_HACK
-    $result = "hadoop fs -text '$f' |";
+    my $fs = join ' ', map shell_quote($_), hadoop_ls $f;
+    $result = "${original}hadoop fs -text $fs |";
   } elsif ($f =~ s/^perl://) {
     # Evaluate a Perl expression
     $f =~ s/'/'"'"'/g;
-    $result = "perl -e 'print \$_, \"\\n\" for ($f)' |";
+    $result = "${original}perl -e 'print \$_, \"\\n\" for ($f)' |";
   } elsif ($f =~ /(\w*@?[^:]+):(.*)$/) {
     # Access file over SSH
-    $result = "ssh -C '$1' cat '$2' |";
+    $result = "${original}ssh -C '$1' cat '$2' |";
   } else {
     return undef;
   }
 
-  $always_make_a_command && $result !~ /\|/ ? "cat '$result' |"
+  $always_make_a_command && $result !~ /\|/ ? "${original}cat '$result' |"
                                             : $result;
+}
+
+sub unexpand_filename_shorthands {
+  my ($f) = @_;
+  $f =~ /^#(.*)/ ? $1 : $f;
 }
 
 # Flags
@@ -315,9 +327,9 @@ my %usages = (
   preview    => '',
   pipe       => 'shell command to pipe through',
   entropy    => 'running entropy of relative probabilities/frequencies',
-  hadoop     => 'hadoop streaming: map cmd, reduce cmd (emits outfile list)',
-  hadoopcat  => 'hadoop streaming: map cmd, reduce cmd (emits data)',
-  hadoopinto => 'hadoop streaming into HDFS: map cmd, reduce cmd, outfile',
+  hadoop     => 'hadoop streaming: mapper, reducer (emits outfiles)',
+  hadoopcat  => 'hadoop streaming: mapper, reducer (emits data)',
+  hadoopinto => 'hadoop streaming into HDFS: mapper, reducer, outpath',
 );
 
 my %env_docs = (
@@ -466,6 +478,16 @@ sub hadoop {
   join ' ', $ENV{NFU_HADOOP_COMMAND} // "hadoop", map shell_quote($_), @_;
 }
 
+sub hadoop_ls {
+  # Now get the output file listing. This is a huge mess because Hadoop is a
+  # huge mess.
+  # http://stackoverflow.com/questions/21569172/how-to-list-only-file-name-in-hdfs
+  my $ls_command = hadoop('fs', '-ls', $_[0])
+             . " | sed 1d"
+             . " | perl -wlne 'print \"hdfs:\" . +(split \" \",\$_,8)[7]'";
+  grep /\/[^_][^\/]*$/, split /\n/, join '', qx/$ls_command/;
+}
+
 sub hadoop_tempfile {
   # 128 bits of random data
   my $randomness = join '', map sprintf('%04x', rand 65536), 0 .. 8;
@@ -504,15 +526,10 @@ sub hadoop_into {
   # locations because by now they've all been filename alias-expanded. We need
   # to reverse-engineer the alias if we want to reuse stuff already on HDFS.
 
-  # HDFS_REVERSE_ENGINEERING_HACK
-  my ($hdfs_start, $hdfs_end) =
-    split /XXX/, expand_filename_shorthands("hdfs:XXX", 1);
-  my $hdfs_pattern = qr/^\Q$hdfs_start\E([^']+)\Q$hdfs_end\E$/;
-
   my @other_argv;
   while (@ARGV) {
-    local $_ = shift @ARGV;
-    if (s/$hdfs_pattern/$1/) {
+    local $_ = unexpand_filename_shorthands shift @ARGV;
+    if (s/^hdfs://) {
       push @input_files, '-input', $_;
     } else {
       push @other_argv, $_;
@@ -575,14 +592,7 @@ sub hadoop_into {
     and die "failed to execute hadoop command $hadoop_command: $!";
 
   system hadoop('fs', '-rm', '-r', @delete_afterwards) . ' 1>&2';
-
-  # Now get the output file listing. This is a huge mess because Hadoop is a
-  # huge mess.
-  # http://stackoverflow.com/questions/21569172/how-to-list-only-file-name-in-hdfs
-  my $ls_command = hadoop('fs', '-ls', $outfile)
-             . " | sed 1d"
-             . " | perl -wlne 'print \"hdfs:\" . +(split \" \",\$_,8)[7]'";
-  grep /\/[^_][^\/]*$/, split /\n/, qx/$ls_command/;
+  hadoop_ls $outfile;
 }
 
 my %functions = (
@@ -1134,9 +1144,9 @@ if (@ARGV ? $ARGV[0] =~ /^-[h?]$/ || $ARGV[0] =~ /^--(usage|help)$/
   print STDERR "     --expand-gnuplot    <gnuplot options>\n";
 
   print STDERR "\n  pipeline modifiers:\n";
-  print STDERR "     --quote  -- quotes args: eval \$(nfu -Q|--quote ...)\n";
-  print STDERR "     --use    <file.pl>\n";
-  print STDERR "     --run    <perl code>\n";
+  print STDERR "     -Q|--quote  -- quotes args: eval \$(nfu --quote ...)\n";
+  print STDERR "     --use       <file.pl>\n";
+  print STDERR "     --run       <perl code>\n";
 
   print STDERR "\nand each command is one of the following:\n\n";
 
@@ -1173,7 +1183,7 @@ if (@ARGV ? $ARGV[0] =~ /^-[h?]$/ || $ARGV[0] =~ /^--(usage|help)$/
 
 if (@ARGV and $ARGV[0] eq '--quote' || $ARGV[0] =~ s/^-Q/-/) {
   # Quote all other arguments so a shell will parse them correctly.
-  shift @ARGV if $ARGV[0] eq '--quote';
+  shift @ARGV if $ARGV[0] eq '--quote' || $ARGV[0] eq '-';
   print quote_self(@ARGV), "\n";
   exit 0;
 }
