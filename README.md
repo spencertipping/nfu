@@ -1,5 +1,9 @@
 # nfu: Numeric Fu for your shell
-_See also [the Humongous Survival Guide](humongous-survival-guide.md)_
+Documentation:
+
+- [The Humongous Survival Guide](humongous-survival-guide.md)
+- [The nfu Cookbook](cookbook.md)
+- [nfu and Hadoop Streaming](hadoop.md)
 
 `nfu` gives you a handful of simple operators that do things you'd otherwise do
 with shell commands. For example, here are some different ways to add a list of
