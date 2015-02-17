@@ -146,6 +146,7 @@ our $start_time = undef;
 our $verbose_command = '';
 our @verbose_args;
 our $verbose_command_formatted = undef;
+our $inside_hadoop_job         = length $ENV{mapred_job_id};
 
 our $last_verbose_report = 0;
 our $verbose_row         = 0;
@@ -168,13 +169,29 @@ sub be_verbose_as_appropriate {
   $verbose_command_formatted //= join ' ', $verbose_command, @verbose_args;
   $start_time //= $now;
   my $runtime = $now - $start_time || 1;
-  printf STDERR "\033[%d;1H\033[K%10dl %8.1fl/s %10dk %8.1fkB/s  %s",
-                $verbose_row,
-                $n_lines,
-                $n_lines / $runtime,
-                $n_bytes / 1024,
-                $n_bytes / 1024 / $runtime,
-                $verbose_command_formatted;
+
+  unless ($inside_hadoop_job) {
+    # Print status updates straight to the terminal
+    printf STDERR "\033[%d;1H\033[K%10dl %8.1fl/s %10dk %8.1fkB/s  %s",
+                  $verbose_row,
+                  $n_lines,
+                  $n_lines / $runtime,
+                  $n_bytes / 1024,
+                  $n_bytes / 1024 / $runtime,
+                  $verbose_command_formatted;
+  } else {
+    # Use Hadoop-specific syntax to update job counters
+    $verbose_command_formatted =~ s/[,\n]/_/g;
+    printf STDERR "reporter:counter:%s,%s,%d\n", $verbose_command_formatted, @$_
+    for (['lines',   $n_lines],
+         ['runtime', $runtime],
+         ['kB',      $n_bytes / 1024]);
+
+    # Reset variables because Hadoop treats them as incremental
+    $n_lines    = 0;
+    $n_bytes    = 0;
+    $start_time = $now;
+  }
 }
 
 END {
