@@ -264,6 +264,7 @@ my %arity = (
   pipe       => 1,
   entropy    => 0,
   hadoop     => 2,
+  hadoopcat  => 2,
   hadoopinto => 3,
 );
 
@@ -314,7 +315,8 @@ my %usages = (
   preview    => '',
   pipe       => 'shell command to pipe through',
   entropy    => 'running entropy of relative probabilities/frequencies',
-  hadoop     => 'hadoop streaming: map cmd, reduce cmd',
+  hadoop     => 'hadoop streaming: map cmd, reduce cmd (emits outfile list)',
+  hadoopcat  => 'hadoop streaming: map cmd, reduce cmd (emits data)',
   hadoopinto => 'hadoop streaming into HDFS: map cmd, reduce cmd, outfile',
 );
 
