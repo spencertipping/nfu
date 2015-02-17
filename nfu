@@ -530,7 +530,7 @@ sub hadoop_matched_partfile {
 
   # In most cases we'll have the same number of partfiles on each side.
   if (@left_files == @possibilities) {
-    my @matched = grep $n == hadoop_partfile_n $_, @possibilities;
+    my @matched = grep $n == hadoop_partfile_n($_), @possibilities;
     "hdfs:" . join(',', @matched);
   } else {
     die "hadoop_matched_partfile cannot yet handle joins across different "
