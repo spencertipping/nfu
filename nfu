@@ -520,7 +520,7 @@ sub gcd {
   $a;
 }
 
-sub hadoop_partfile_n { $1 if $_[0] =~ /[^0-9]([0-9]+)$/ }
+sub hadoop_partfile_n { $1 if $_[0] =~ /[^0-9]([0-9]+)(?:\.[^\/]+)?$/ }
 sub hadoop_matched_partfile {
   my ($path, $partfile) = @_;
   my @left_files    = hadoop_ls $ENV{mapred_input_dir};
