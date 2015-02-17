@@ -546,7 +546,7 @@ sub hadoop_matched_partfile {
   my $left_redundancy  = @possibilities / $reduction_factor;
   my @files_to_read    = @possibilities[map $_ * $reduction_factor + $n,
                                             0 .. $left_redundancy - 1];
-  "hdfs:" . join(',', @files_to_read);
+  "hdfs:{" . join(',', map s/^hdfs://r, @files_to_read) . "}";
 }
 
 sub hadoop_tempfile {
