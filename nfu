@@ -510,7 +510,7 @@ sub hadoop_into {
   # to reverse-engineer the alias if we want to reuse stuff already on HDFS.
 
   # HDFS_REVERSE_ENGINEERING_HACK
-  my $hdfs_template = expand_filename_shorthands("hdfs:XXX") =~ s/XXX/([^']+)/r;
+  my $hdfs_template = expand_filename_shorthands("hdfs:XXX", 1) =~ s/XXX/([^']+)/r;
   my $hdfs_pattern  = qr/$hdfs_template/;
 
   my @other_argv;
