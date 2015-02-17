@@ -215,7 +215,8 @@ END {
 my @evaled_code;
 
 sub shell_quote {$_[0] =~ /[^-\/\w]/ ? "'" . ($_[0] =~ s/'/'\\''/gr) . "'"
-                                     : $_[0]}
+               : length $_[0]        ? $_[0]
+               :                       "''"}
 
 sub quote_self {join ' ', $0, map shell_quote($_), @_}
 
