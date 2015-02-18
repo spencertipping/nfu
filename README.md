@@ -17,13 +17,12 @@ Then if you wanted to plot a cumulative histogram of the `.metadata.size` JSON
 field from the third column values, binned to the nearest 100:
 
 ```sh
-# long version
+$ nfu output -m 'jd(%2).metadata.size' -q100ocOs1f10p %l
+
+# equivalent long version
 $ nfu output --map 'json_decode($_[2]).metadata.size' \
              --quant 100 --order --count --rorder \
              --sum 1 --fields 10 --plot 'with lines'
-
-# equivalent short version
-$ nfu output -m 'jd(%2).metadata.size' -q100ocOs1f10p %l
 ```
 
 ## Documentation
