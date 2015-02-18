@@ -768,7 +768,7 @@ sub hadoop_into {
 
   system hadoop('fs', '-rm', '-r', @delete_afterwards) . ' 1>&2'
     if @delete_afterwards;
-  map "hdfs:$_", hadoop_ls $outfile;
+  "hdfs:$outfile";
 }
 
 my %functions = (
@@ -1289,17 +1289,15 @@ my %functions = (
     close for values %fhs;
   },
 
-  hadoop => sub {
-    print "$_\n" for hadoop_into @_, hadoop_tempfile;
-  },
+  hadoop     => sub { print hadoop_into(@_, hadoop_tempfile), "\n" },
+  hadoopinto => sub { print hadoop_into(@_), "\n" },
 
   hadoopcat => sub {
     my $filename = hadoop_tempfile;
-    system hadoop('fs', '-text', map s/^hdfs://r, hadoop_into @_, $filename);
+    system hadoop('fs', '-text', map s/^hdfs://r,
+                                     hadoop_ls hadoop_into @_, $filename);
     system hadoop('fs', '-rm', '-r', $filename) . ' 1>&2';
   },
-
-  hadoopinto => sub {printf "$_\n" for hadoop_into @_},
 
   psqlinto => sub {
     my ($tname, $schema) = @_;
