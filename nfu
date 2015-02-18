@@ -126,22 +126,12 @@ sub expand_filename_shorthands {
     # Use Hadoop commands to read stuff. The command itself needs to be
     # deferred because the hdfs path might not exist when the pseudofile is
     # resolved.
-    $result = "${original}$0 hdfs-ls:" . shell_quote($f)
-                                       . " | sed 's/^hdfs://'"
-                                       . " | xargs hadoop fs -text |";
-  } elsif ($f =~ s/^hdfs-lsjoin://) {
-    # List key-matching partfiles within the directory. This is used by
-    # hdfsjoin: below to provide indirection.
-    $result = "${original}echo '"
-            . join("\n", map "hdfs:" . shell_quote($_),
-                             hadoop_matched_partfiles $f, $ENV{map_input_file})
-            . "' |";
+    $result = "${original}hadoop fs -text " . shell_quote(hadoop_ls $f) . " |";
   } elsif ($f =~ s/^hdfsjoin://) {
-    # Mapside join against corresponding partfile(s); this needs to be deferred
-    # because partition counts are calculated when hdfs-lsjoin: is
-    # dereferenced.
-    $result = "${original}$0 hdfs-lsjoin:" . shell_quote($f)
-                                           . " | xargs $0 |";
+    $result = "${original}$0 "
+            . shell_quote(map "hdfs:$_",
+                          hadoop_matched_partfiles $f, $ENV{map_input_file})
+            . " |";
   } elsif ($f =~ s/^perl://) {
     # Evaluate a Perl expression
     $f =~ s/'/'"'"'/g;
@@ -1506,9 +1496,15 @@ while (@args_to_parse) {
   } elsif ($command eq 'quote' || $command eq 'Q') {
     $quote_self = 1;
   } else {
-    my $f = expand_filename_shorthands $command;
-    die "nonexistent pseudofile: $command" unless defined $f;
-    push @ARGV, $f;
+    if ($quote_self) {
+      # Defer pseudofile resolution. This matters for things like intermediate
+      # Hadoop outputs.
+      push @ARGV, $command;
+    } else {
+      my $f = expand_filename_shorthands $command;
+      die "nonexistent pseudofile: $command" unless defined $f;
+      push @ARGV, $f;
+    }
   }
 }
 
