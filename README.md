@@ -26,6 +26,7 @@ $ nfu output --map 'json_decode($_[2]).metadata.size' \
 $ nfu output -m 'jd(%2).metadata.size' -q100ocOs1f10p %l
 ```
 
+## Documentation
 - [The Humongous Survival Guide](humongous-survival-guide.md)
 - [The nfu Cookbook](cookbook.md)
 - [nfu and Hadoop Streaming](hadoop.md)
