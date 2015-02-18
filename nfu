@@ -560,10 +560,9 @@ sub hadoop_ls {
   # Now get the output file listing. This is a huge mess because Hadoop is a
   # huge mess.
   my $ls_command = hadoop('fs', '-ls', @_);
-  my $ls_output  = ''.qx/$ls_command/;
   grep /\/[^_][^\/]*$/, map +(split " ", $_, 8)[7],
                         grep !/^Found/,
-                        split /\n/, $ls_output;
+                        split /\n/, ''.qx/$ls_command/;
 }
 
 sub gcd {
