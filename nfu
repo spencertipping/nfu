@@ -627,6 +627,8 @@ sub hadoop_into {
   my ($mapper, $reducer, $outfile) = @_;
   my $streaming_jar = $ENV{NFU_HADOOP_STREAMING} // find_hadoop_streaming;
 
+  $reducer = 'NONE' if $reducer =~ /^[-_]$/;
+
   my @input_files;
   my @delete_afterwards;
 

@@ -9,7 +9,8 @@ does this by providing three Hadoop-related commands:
   specified destination (rather than a tempfile)
 
 The "mapper" and "reducer" arguments are arbitrary shell commands that may or
-may not involve nfu. "reducer" can be set to `NONE` to run a map-only job.
+may not involve nfu. "reducer" can be set to `NONE`, `-`, or `_` to run a
+map-only job.
 
 Normally you'd write the mapper and reducer either as external commands, or by
 using `nfu --quote ...` or `nfu -Q...`. However, nfu provides a shorthand
@@ -19,8 +20,8 @@ Hadoop jobs support some magic to simplify data transfer:
 
 ```sh
 # upload from stdin
-$ seq 100 | nfu --hadoopcat "$(nfu --quote -m 'row %0, %0 + 1')" NONE
-$ seq 100 | nfu --hadoopcat [ -m 'row %0, %0 + 1' ] NONE
+$ seq 100 | nfu --hadoopcat "$(nfu --quote -m 'row %0, %0 + 1')" _
+$ seq 100 | nfu --hadoopcat [ -m 'row %0, %0 + 1' ] _
 
 # upload from pseudofiles
 $ nfu sh:'seq 100' --hadoopcat ...
@@ -38,7 +39,7 @@ downloading/uploading all of the intermediate results:
 # two hadoop jobs; intermediate results stay on HDFS and are never downloaded
 $ seq 100 | nfu --hadoop [ -m 'row %0 % 10, %0 + 1' ] \
                          [ -gc ] \
-                --hadoopcat [ -C ] NONE
+                --hadoopcat [ -C ] _
 ```
 
 nfu detects when it's being run as a hadoop streaming job and changes its
@@ -46,7 +47,7 @@ verbose behavior to create hadoop counters. This means you can get the same
 kind of throughput statistics by using the `-v` option:
 
 ```sh
-$ seq 10000 | nfu --hadoopcat [ -vgc ] NONE
+$ seq 10000 | nfu --hadoopcat [ -vgc ] _
 ```
 
 Because `hdfs:` is a pseudofile prefix, you can also transparently download
@@ -76,7 +77,7 @@ $ nfu sh:'shuf /usr/share/dict/words' \
 
 # now inner-join against that data
 $ nfu /usr/share/dict/words \
-  --hadoopcat [ -vi0 hdfsjoin:/tmp/nfu-jointest ] NONE
+  --hadoopcat [ -vi0 hdfsjoin:/tmp/nfu-jointest ] _
 ```
 
 ## Examples
