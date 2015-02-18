@@ -261,6 +261,7 @@ my %explosions = (
   c => '--count',
   C => '--uncount',
   D => '--drop',
+  e => '--each',
   E => '--every',
   f => '--fields',
   F => '--fieldsplit',
@@ -298,6 +299,7 @@ my %arity = (
   uncount    => 0,
   delta      => 0,
   drop       => 0,
+  each       => 1,
   every      => 1,
   fields     => 0,
   fieldsplit => 1,
@@ -353,6 +355,7 @@ my %usages = (
   uncount    => 'the opposite of --count; repeats each row N times',
   delta      => 'value -> difference from last value',
   drop       => 'number of records to drop',
+  each       => 'template; executes with {} set to each value',
   every      => 'n (returns every nth row)',
   fields     => 'string of digits, each a zero-indexed column selector',
   fieldsplit => 'regexp to use for splitting',
@@ -1161,6 +1164,16 @@ my %functions = (
       chomp;
       my @xs = split /\t/;
       print $_ unless $f->(@xs);
+    }
+  },
+
+  each => sub {
+    my ($template) = @_;
+    while (<>) {
+      be_verbose_as_appropriate length;
+      chomp;
+      my $c = $template =~ s/\{\}/$_/gr;
+      system $c and die "each: failed to run $c: $!";
     }
   },
 
