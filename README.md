@@ -110,7 +110,7 @@ argument bracket preprocessing:
 
       [ ]         nfu command:     [ -gc ]       == "$(nfu -Qgc)"
   find[ ]           file list: find[ ... ]       == $(find ...) but safer
-   nfu[ ]      nfu pseudofile:  nfu[ perl:0..5 ] == sh:"$(nfu -Q perl:0..5)"
+   nfu[ ]      nfu pseudofile:  nfu[ perl:0..5 ] == "sh:$(nfu -Q perl:0..5)"
     qq[ ]          quasiquote:   qq[ stuff ]     == "stuff"
     sh[ ]    shell pseudofile:   sh[ cat foo ]   == "sh:cat foo"
 

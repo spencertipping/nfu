@@ -1293,7 +1293,7 @@ my %bracket_handlers = (
 my %bracket_docs = (
   ''   => '     nfu command:     [ -gc ]       == "$(nfu -Qgc)"',
   qq   => '      quasiquote:   qq[ stuff ]     == "stuff"',
-  nfu  => '  nfu pseudofile:  nfu[ perl:0..5 ] == sh:"$(nfu -Q perl:0..5)"',
+  nfu  => '  nfu pseudofile:  nfu[ perl:0..5 ] == "sh:$(nfu -Q perl:0..5)"',
   sh   => 'shell pseudofile:   sh[ cat foo ]   == "sh:cat foo"',
   find => '       file list: find[ ... ]       == $(find ...) but safer',
 );
