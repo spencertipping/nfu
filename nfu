@@ -127,6 +127,7 @@ sub expand_filename_shorthands {
     # deferred because the hdfs path might not exist when the pseudofile is
     # resolved.
     $result = "${original}$0 hdfs-ls:" . shell_quote($f)
+                                       . " | sed 's/^hdfs://'"
                                        . " | xargs hadoop fs -text |";
   } elsif ($f =~ s/^hdfs-lsjoin://) {
     # List key-matching partfiles within the directory. This is used by
