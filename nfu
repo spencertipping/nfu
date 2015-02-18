@@ -89,6 +89,7 @@ sub jd {json_decode @_}
 # File functions
 sub hadoop_ls;
 sub hadoop_matched_partfiles;
+sub shell_quote;
 sub expand_filename_shorthands {
   # NB: we prepend a shell comment containing the original $f so anyone
   # downstream can get it back. This is currently used by Hadoop to reuse data
@@ -145,6 +146,19 @@ sub unexpand_filename_shorthands {
   my ($f) = @_;
   $f =~ /^#(.*)/ ? $1 : $f;
 }
+
+my %pseudofile_docs = (
+  'file.gz'       => 'decompress file with gzip -dc',
+  'file.bz2'      => 'decompress file with bzip2 -dc',
+  'file.xz'       => 'decompress file with xz -dc',
+  'file.lzo'      => 'decompress file with lzop -dc',
+  'http[s]://url' => 'retrieve url with curl',
+  'sh:stuff'      => 'run sh -c "stuff", take stdout',
+  'hdfs:path'     => 'read HDFS file(s) with hadoop fs -text',
+  'hdfsjoin:path' => 'mapside join pseudofile (a subset of hdfs:path)',
+  'perl:expr'     => 'perl -e \'print "$_\n" for (expr)\'',
+  'user@host:x'   => 'remote data access (x can be a pseudofile)',
+);
 
 # Flags
 our $verbose    = 0;
@@ -1219,6 +1233,16 @@ my %functions = (
   },
 );
 
+my %bracket_handlers = (
+  '' => sub {        join ' ', map shell_quote($_), $0, @_},
+  sh => sub {"sh:" . join ' ', map shell_quote($_), @_},
+);
+
+my %bracket_docs = (
+  '' => '  nfu command: [ -gc ]       == "$(nfu --quote -gc)"',
+  sh => 'shell command: sh[ cat foo ] == "sh:cat foo"',
+);
+
 # Print usage if the user clearly doesn't know what they're doing.
 if (@ARGV ? $ARGV[0] =~ /^-[h?]$/ || $ARGV[0] =~ /^--(usage|help)$/
           : -t STDIN) {
@@ -1230,21 +1254,11 @@ if (@ARGV ? $ARGV[0] =~ /^-[h?]$/ || $ARGV[0] =~ /^--(usage|help)$/
   exists $usages{$_ =~ s/--//r} or die "no usage for $_"
     for values %explosions, keys %usages;
 
+  exists $bracket_docs{$_} or die "no bracket doc for $_"
+    for keys %bracket_handlers;
+
   print STDERR "usage: nfu [prefix-commands...] [input-files...] commands...\n";
-  print STDERR "where prefix commands are:\n\n";
-
-  print STDERR "  documentation (not used with normal commands):\n";
-  print STDERR "     --explain           <other-options>\n";
-  print STDERR "     --expand-pseudofile <filename>\n";
-  print STDERR "     --expand-code       <code>\n";
-  print STDERR "     --expand-gnuplot    <gnuplot options>\n";
-
-  print STDERR "\n  pipeline modifiers:\n";
-  print STDERR "     -Q|--quote  -- quotes args: eval \$(nfu --quote ...)\n";
-  print STDERR "     --use       <file.pl>\n";
-  print STDERR "     --run       <perl code>\n";
-
-  print STDERR "\nand each command is one of the following:\n\n";
+  print STDERR "where each command is one of the following:\n\n";
 
   my $len = 1 + max map length, keys %usages;
   my %short_lookup;
@@ -1260,6 +1274,29 @@ if (@ARGV ? $ARGV[0] =~ /^-[h?]$/ || $ARGV[0] =~ /^--(usage|help)$/
                   $usages{$cmd} ? $arity{$cmd} ? "<$usages{$cmd}>"
                                                : "-- $usages{$cmd}" : '';
   }
+
+  print STDERR "\nand prefix commands are:\n\n";
+
+  print STDERR "  documentation (not used with normal commands):\n";
+  print STDERR "     --explain           <other-options>\n";
+  print STDERR "     --expand-pseudofile <filename>\n";
+  print STDERR "     --expand-code       <code>\n";
+  print STDERR "     --expand-gnuplot    <gnuplot options>\n";
+
+  print STDERR "\n  pipeline modifiers:\n";
+  print STDERR "     -Q|--quote  -- quotes args: eval \$(nfu --quote ...)\n";
+  print STDERR "     --use       <file.pl>\n";
+  print STDERR "     --run       <perl code>\n";
+
+  print STDERR "\nargument bracket preprocessing:\n\n";
+
+  printf STDERR "  %4s[ ]    %s\n", $_, $bracket_docs{$_}
+  for sort keys %bracket_docs;
+
+  my $pseudofile_len = 1 + max map length, keys %pseudofile_docs;
+  print STDERR "\npseudofile patterns:\n\n";
+  printf STDERR "  %-${pseudofile_len}s %s\n", $_, $pseudofile_docs{$_}
+  for sort keys %pseudofile_docs;
 
   print STDERR "\ngnuplot expansions:\n\n";
   printf STDERR "  %2s -> '%s'\n", $_, $gnuplot_aliases{$_}
@@ -1294,13 +1331,17 @@ if (@ARGV && $ARGV[0] =~ /^--expand/) {
 
 my @args_to_parse;
 
+# Preprocess args to look for bracketed groups. These need to be collapsed into
+# single args, which must happen before we start assigning arguments to
+# commands.
 while (@ARGV) {
   my $x = shift @ARGV;
-  if ($x eq '[') {
+  if ($x =~ s/\[$//) {
     my @xs;
     push @xs, shift @ARGV while @ARGV && $ARGV[0] ne ']';
     shift @ARGV;
-    unshift @ARGV, join ' ', map shell_quote($_), $0, @xs;
+    die "unknown bracket prefix: $x" unless exists $bracket_handlers{$x};
+    unshift @ARGV, $bracket_handlers{$x}->(@xs);
   } else {
     push @args_to_parse, $x;
   }
