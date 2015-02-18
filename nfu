@@ -128,6 +128,17 @@ sub expand_filename_shorthands {
     # Evaluate a Perl expression
     $f =~ s/'/'"'"'/g;
     $result = "${original}perl -e 'print \$_, \"\\n\" for ($f)' |";
+  } elsif ($f =~ s/^psql://) {
+    # Run a postgres query, exporting results as TSV
+    $f =~ s/'/'"'"'/g;
+    $result = "${original}psql -c 'COPY ($f) TO STDOUT WITH NULL AS '\\'\\' |";
+  } elsif ($f =~ s/^psqls://) {
+    # Look for postgres tables
+    my $query = "SELECT tablename FROM pg_catalog.pg_tables "
+              . "WHERE tableowner = '$ENV{USER}'";
+    $query .= "AND tablename LIKE '$f'" if length $f;
+    $result = "${original}psql -c " . shell_quote("COPY ($query) TO STDOUT")
+                                    . ' |';
   } elsif ($f =~ /(\w*@?[^:]+):(.*)$/) {
     # Access file over SSH. We need to make sure nfu is running on the remote
     # end, since the remote file might be gzipped or some such. Because the
@@ -148,16 +159,18 @@ sub unexpand_filename_shorthands {
 }
 
 my %pseudofile_docs = (
-  'file.gz'       => 'decompress file with gzip -dc',
-  'file.bz2'      => 'decompress file with bzip2 -dc',
-  'file.xz'       => 'decompress file with xz -dc',
-  'file.lzo'      => 'decompress file with lzop -dc',
-  'http[s]://url' => 'retrieve url with curl',
-  'sh:stuff'      => 'run sh -c "stuff", take stdout',
-  'hdfs:path'     => 'read HDFS file(s) with hadoop fs -text',
-  'hdfsjoin:path' => 'mapside join pseudofile (a subset of hdfs:path)',
-  'perl:expr'     => 'perl -e \'print "$_\n" for (expr)\'',
-  'user@host:x'   => 'remote data access (x can be a pseudofile)',
+  'file.gz'         => 'decompress file with gzip -dc',
+  'file.bz2'        => 'decompress file with bzip2 -dc',
+  'file.xz'         => 'decompress file with xz -dc',
+  'file.lzo'        => 'decompress file with lzop -dc',
+  'http[s]://url'   => 'retrieve url with curl',
+  'sh:stuff'        => 'run sh -c "stuff", take stdout',
+  'hdfs:path'       => 'read HDFS file(s) with hadoop fs -text',
+  'hdfsjoin:path'   => 'mapside join pseudofile (a subset of hdfs:path)',
+  'psql:query'      => 'results of postgres query as TSV',
+  'psqls:[pattern]' => 'list of postgres tables owned by you',
+  'perl:expr'       => 'perl -e \'print "$_\n" for (expr)\'',
+  'user@host:x'     => 'remote data access (x can be a pseudofile)',
 );
 
 # Flags
@@ -321,6 +334,8 @@ my %arity = (
   hadoop     => 2,
   hadoopcat  => 2,
   hadoopinto => 3,
+  psql       => 3,
+  psqlinto   => 2,
 );
 
 my %usages = (
@@ -373,6 +388,8 @@ my %usages = (
   hadoop     => 'hadoop streaming: mapper, reducer (emits outfiles)',
   hadoopcat  => 'hadoop streaming: mapper, reducer (emits data)',
   hadoopinto => 'hadoop streaming into HDFS: mapper, reducer, outpath',
+  psql       => 'query temporary postgres table: name, schema, query',
+  psqlinto   => 'create postgres table: name, schema',
 );
 
 my %env_docs = (
@@ -526,7 +543,7 @@ sub hadoop_ls {
   # Now get the output file listing. This is a huge mess because Hadoop is a
   # huge mess.
   # http://stackoverflow.com/questions/21569172/how-to-list-only-file-name-in-hdfs
-  my $ls_command = hadoop('fs', '-ls', $_[0])
+  my $ls_command = hadoop('fs', '-ls', @_)
              . " | grep -v '^Found'"
              . " | perl -wlne 'print +(split \" \",\$_,8)[7]'";
   grep /\/[^_][^\/]*$/, split /\n/, join '', qx/$ls_command/;
@@ -672,7 +689,7 @@ sub hadoop_into {
   # Now all the input files are in place, so we can kick off the job.
   my $extra_args = $ENV{NFU_HADOOP_OPTIONS} // '';
   my @self_dep   = ('-file', $0);
-  my $dirname    = $0 =~ s/\/nfu$//r;
+  my $dirname    = $0 =~ s/\/nfu$/\//r;
 
   # We're uploading ourselves, so we'll need a current-directory reference to
   # nfu. When nfu quotes itself, it produces an absolute path instead; this
@@ -1223,6 +1240,36 @@ my %functions = (
 
   hadoopinto => sub {printf "$_\n" for hadoop_into @_},
 
+  psqlinto => sub {
+    my ($tname, $schema) = @_;
+    system "psql -c 'CREATE TABLE $tname ($schema)' 1>&2"
+      and die "psqlinto: failed to create table $tname";
+    open my $fh, "| psql -c 'COPY $tname FROM STDIN' 1>&2"
+      or die "psqlinto: failed to open psql for table $tname: $!";
+
+    be_verbose_as_appropriate(length), $fh->print($_) while <>;
+    close $fh;
+
+    print $tname, "\n";
+  },
+
+  psql => sub {
+    my ($tname, $schema, $query) = @_;
+    system "psql -c 'CREATE TABLE $tname ($schema)' 1>&2"
+      and die "psql: failed to create table $tname";
+    open my $fh, "| psql -c 'COPY $tname FROM STDIN' 1>&2"
+      or die "psql: failed to open psql for table $tname: $!";
+
+    be_verbose_as_appropriate(length), $fh->print($_) while <>;
+    close $fh;
+
+    $query = shell_quote "COPY ($query) TO STDOUT WITH NULL AS ''";
+    system "psql -c $query"
+      and die "psql: failed to execute query against table $tname";
+    system "psql -c 'DROP TABLE $tname' 1>&2"
+      and die "psql: failed to drop table $tname after running $query";
+  },
+
   preview => sub {
     my $have_less = !system 'which less > /dev/null';
     my $have_more = !system 'which more > /dev/null';
@@ -1243,10 +1290,10 @@ my %bracket_handlers = (
 );
 
 my %bracket_docs = (
-  ''   => '     nfu command:     [ -gc ]     == "$(nfu --quote -gc)"',
-  qq   => '      quasiquote:   qq[ stuff ]   == "stuff"',
-  sh   => 'shell pseudofile:   sh[ cat foo ] == "sh:cat foo"',
-  find => '       file list: find[ ... ]     == $(find ...) but safer',
+  ''   => '     nfu command:     [ -gc ]      == "$(nfu --quote -gc)"',
+  qq   => '      quasiquote:   qq[ stuff ]    == "stuff"',
+  sh   => 'shell pseudofile:   sh[ cat foo ]  == "sh:cat foo"',
+  find => '       file list: find[ ... ]      == $(find ...) but safer',
 );
 
 # Print usage if the user clearly doesn't know what they're doing.
