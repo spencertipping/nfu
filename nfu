@@ -562,7 +562,7 @@ sub hadoop_ls {
   my $ls_command = hadoop('fs', '-ls', @_);
   my $ls_output  = ''.qx/$ls_command/;
   die "hadoop ls @_ failed: $?" if $?;
-  grep /\/[^_][^\/]*$/, map +(split / /, $_, 8)[7],
+  grep /\/[^_][^\/]*$/, map +(split " ", $_, 8)[7],
                         grep !/^Found/,
                         split /\n/, $ls_output;
 }
