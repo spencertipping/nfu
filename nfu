@@ -559,13 +559,12 @@ sub hadoop {
 sub hadoop_ls {
   # Now get the output file listing. This is a huge mess because Hadoop is a
   # huge mess.
-  # http://stackoverflow.com/questions/21569172/how-to-list-only-file-name-in-hdfs
-  my $ls_command = hadoop('fs', '-ls', @_)
-             . " | grep -v '^Found'"
-             . " | perl -wlne 'print +(split \" \",\$_,8)[7]'";
-  my $ls_output = ''.qx/$ls_command/;
+  my $ls_command = hadoop('fs', '-ls', @_);
+  my $ls_output  = ''.qx/$ls_command/;
   die "hadoop ls @_ failed: $?" if $?;
-  grep /\/[^_][^\/]*$/, split /\n/, $ls_output;
+  grep /\/[^_][^\/]*$/, map +(split / /, $_, 8)[7],
+                        grep !/^Found/,
+                        split /\n/, $ls_output;
 }
 
 sub gcd {
