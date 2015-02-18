@@ -87,6 +87,7 @@ sub je {json_encode @_}
 sub jd {json_decode @_}
 
 # File functions
+sub random128 {join '', map sprintf('%04x', rand 65536), 0 .. 8}
 sub hadoop_ls;
 sub hadoop_matched_partfiles;
 sub shell_quote;
@@ -606,8 +607,7 @@ sub hadoop_matched_partfiles {
 }
 
 sub hadoop_tempfile {
-  # 128 bits of random data
-  my $randomness = join '', map sprintf('%04x', rand 65536), 0 .. 8;
+  my $randomness = random128;
   my $dir        = $ENV{NFU_HADOOP_TMPDIR} // '/tmp';
   "$dir/nfu-hadoop-$ENV{USER}-$randomness";
 }
@@ -699,9 +699,31 @@ sub hadoop_into {
   my $transformed_mapper  = $mapper  =~ s|\Q$dirname\E|./|gr;
   my $transformed_reducer = $reducer =~ s|\Q$dirname\E|./|gr;
 
+  # Write the mapper and reducer commands into files rather than passing them
+  # straight to hadoop streaming. This bypasses two problems:
+  #
+  # 1. Hadoop streaming might chop long arguments sooner than bash.
+  # 2. It word-splits differently from bash, which breaks shell_quote.
+
+  my $tmp_path     = tmpnam =~ s/\/[^\/]+$/\//r;
+  my $mapper_file  = $tmp_path . random128;
+  my $reducer_file = $tmp_path . random128;
+
+  open my $mapper_fh,  '>', $mapper_file
+    or die "failed to create tempfile $mapper_file for map job: $!";
+  open my $reducer_fh, '>', $reducer_file
+    or die "failed to create tempfile $reducer_file for reduce job: $!";
+  print $mapper_fh  "#!/bin/bash\n$transformed_mapper\n";
+  print $reducer_fh "#!/bin/bash\n$transformed_reducer\n";
+  close $mapper_fn;
+  close $reducer_fn;
+
+  chmod 0755, $mapper_file;
+  chmod 0755, $reducer_file;
+
   my $jobname = "nfu streaming ["
               . join(' ', grep $_ ne '-input', @input_files)
-              . "]: $transformed_mapper, $transformed_reducer"
+              . "]: map($transformed_mapper), reduce($transformed_reducer)"
               . " > $outfile";
 
   my $hadoop_command =
@@ -710,12 +732,19 @@ sub hadoop_into {
            . " -D mapred.job.name=" . shell_quote($jobname) . " $extra_args",
            @self_dep,
            @input_files,
+           '-file',    $mapper_file,
+           '-file',    $reducer_file,
            '-output',  $outfile,
-           '-mapper',  '/bin/bash -c ' . shell_quote($transformed_mapper),
-           '-reducer', '/bin/bash -c ' . shell_quote($transformed_reducer));
+           '-mapper',  "./" . ($mapper_file =~ s/^.*\///r),
+           '-reducer', $reducer eq 'NONE'
+                         ? $reducer
+                         : "./" . ($reducer_file =~ s/^.*\///r));
 
   system $hadoop_command . ' 1>&2'
     and die "failed to execute hadoop command $hadoop_command: $!";
+
+  unlink $mapper_file;
+  unlink $reducer_file;
 
   system hadoop('fs', '-rm', '-r', @delete_afterwards) . ' 1>&2'
     if @delete_afterwards;
