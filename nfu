@@ -1300,7 +1300,7 @@ while (@ARGV) {
     my @xs;
     push @xs, shift @ARGV while @ARGV && $ARGV[0] ne ']';
     shift @ARGV;
-    unshift @ARGV, shell_quote join ' ', map shell_quote($_), $0, @xs;
+    unshift @ARGV, join ' ', map shell_quote($_), $0, @xs;
   } else {
     push @args_to_parse, $x;
   }
