@@ -715,8 +715,8 @@ sub hadoop_into {
     or die "failed to create tempfile $reducer_file for reduce job: $!";
   print $mapper_fh  "#!/bin/bash\n$transformed_mapper\n";
   print $reducer_fh "#!/bin/bash\n$transformed_reducer\n";
-  close $mapper_fn;
-  close $reducer_fn;
+  close $mapper_fh;
+  close $reducer_fh;
 
   chmod 0755, $mapper_file;
   chmod 0755, $reducer_file;
