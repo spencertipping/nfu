@@ -1451,10 +1451,16 @@ my @args_to_parse;
 while (@ARGV) {
   my $x = shift @ARGV;
   if ($x =~ s/\[$//) {
-    my @xs;
-    push @xs, shift @ARGV while @ARGV && $ARGV[0] ne ']';
-    shift @ARGV;
     die "unknown bracket prefix: $x" unless exists $bracket_handlers{$x};
+    my @xs;
+    my $depth = 1;
+    while (@ARGV && $depth) {
+      my $next = shift @ARGV;
+      push @xs, $next;
+      $depth-- if $next eq ']';
+      $depth++ if $next =~ /\[$/;
+    }
+    pop @xs;    # pop closing bracket
     unshift @ARGV, $bracket_handlers{$x}->(@xs);
   } else {
     push @args_to_parse, $x;
