@@ -1284,16 +1284,18 @@ my %functions = (
 my %bracket_handlers = (
   ''   => sub {        shell_quote $0, @_},
   qq   => sub {        shell_quote @_},
+  nfu  => sub {"sh:" . shell_quote $0, @_},
   sh   => sub {"sh:" . shell_quote @_},
   find => sub {my $cmd = "find " . shell_quote(@_) . " -print0";
                split /\0/, join '', qx|$cmd|},
 );
 
 my %bracket_docs = (
-  ''   => '     nfu command:     [ -gc ]      == "$(nfu --quote -gc)"',
-  qq   => '      quasiquote:   qq[ stuff ]    == "stuff"',
-  sh   => 'shell pseudofile:   sh[ cat foo ]  == "sh:cat foo"',
-  find => '       file list: find[ ... ]      == $(find ...) but safer',
+  ''   => '     nfu command:     [ -gc ]       == "$(nfu -Qgc)"',
+  qq   => '      quasiquote:   qq[ stuff ]     == "stuff"',
+  nfu  => '  nfu pseudofile:  nfu[ perl:0..5 ] == sh:"$(nfu -Q perl:0..5)"',
+  sh   => 'shell pseudofile:   sh[ cat foo ]   == "sh:cat foo"',
+  find => '       file list: find[ ... ]       == $(find ...) but safer',
 );
 
 # Print usage if the user clearly doesn't know what they're doing.
