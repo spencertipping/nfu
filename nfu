@@ -587,6 +587,10 @@ sub hadoop_matched_partfiles {
   my @left_files;
   my @possibilities;
 
+  print STDERR "hadoop_matched_partfiles: inputs   = $ENV{mapred_input_dir}\n";
+  print STDERR "hadoop_matched_partfiles: join     = $path\n";
+  print STDERR "hadoop_matched_partfiles: partfile = $partfile\n";
+
   # We won't be able to do anything until both sides of the join exist.
   until (@left_files = hadoop_partsort hadoop_ls $ENV{mapred_input_dir}) {
     print STDERR "hadoop_matched_partfiles: waiting for input...\n";
