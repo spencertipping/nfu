@@ -32,6 +32,10 @@ $ nfu output -m 'jd(%2).metadata.size' -q100ocOs1f10p %l
 - [nfu and Hadoop Streaming](hadoop.md)
 - [nfu and PostgreSQL](postgres.md)
 
+## Contributors
+- [Spencer Tipping](https://github.com/spencertipping)
+- [Factual, Inc](https://github.com/Factual)
+
 MIT license as usual.
 
 ## Options and stuff
