@@ -231,7 +231,7 @@ sub be_verbose_as_appropriate {
     printf STDERR "reporter:counter:%s,%s,%d\n", $verbose_command_formatted, @$_
     for (['lines',      $n_lines],
          ['runtime ms', $runtime * 1000],
-         ['bytes',      $n_bytes / 1024]);
+         ['bytes',      $n_bytes]);
 
     # Reset variables because Hadoop treats them as incremental
     $n_lines    = 0;
