@@ -546,7 +546,7 @@ sub hadoop_ls {
   my $ls_command = hadoop('fs', '-ls', @_)
              . " | grep -v '^Found'"
              . " | perl -wlne 'print +(split \" \",\$_,8)[7]'";
-  grep /\/[^_][^\/]*$/, split /\n/, join '', qx/$ls_command/;
+  grep /\/[^_][^\/]*$/, split /\n/, ''.qx/$ls_command/;
 }
 
 sub gcd {
@@ -613,7 +613,7 @@ sub hadoop_tempfile {
 }
 
 sub find_hadoop_streaming {
-  my @files = split /\n/, join '', qx|locate "*hadoop-streaming.jar*"|;
+  my @files = split /\n/, ''.qx|locate "*hadoop-streaming.jar*"|;
   die "failed to locate hadoop streaming jar automatically; "
     . "you should set NFU_HADOOP_STREAMING" unless @files;
   print STDERR "nfu found hadoop streaming jar: $files[0]\n";
@@ -1284,18 +1284,18 @@ my %functions = (
 );
 
 my %bracket_handlers = (
-  ''   => sub {        shell_quote $0, @_},
+  ''   => sub {my $stuff = shell_quote @_; ""    . qx|$0 --quote $stuff|},
+  nfu  => sub {my $stuff = shell_quote @_; "sh:" . qx|$0 --quote $stuff|},
   qq   => sub {        shell_quote @_},
-  nfu  => sub {"sh:" . shell_quote $0, @_},
   sh   => sub {"sh:" . shell_quote @_},
   find => sub {my $cmd = "find " . shell_quote(@_) . " -print0";
-               split /\0/, join '', qx|$cmd|},
+               split /\0/, ''.qx|$cmd|},
 );
 
 my %bracket_docs = (
   ''   => '     nfu command:     [ -gc ]       == "$(nfu -Qgc)"',
-  qq   => '      quasiquote:   qq[ stuff ]     == "stuff"',
   nfu  => '  nfu pseudofile:  nfu[ perl:0..5 ] == "sh:$(nfu -Q perl:0..5)"',
+  qq   => '      quasiquote:   qq[ stuff ]     == "stuff"',
   sh   => 'shell pseudofile:   sh[ cat foo ]   == "sh:cat foo"',
   find => '       file list: find[ ... ]       == $(find ...) but safer',
 );
