@@ -561,7 +561,6 @@ sub hadoop_ls {
   # huge mess.
   my $ls_command = hadoop('fs', '-ls', @_);
   my $ls_output  = ''.qx/$ls_command/;
-  die "hadoop ls @_ failed: $?" if $?;
   grep /\/[^_][^\/]*$/, map +(split " ", $_, 8)[7],
                         grep !/^Found/,
                         split /\n/, $ls_output;
@@ -583,15 +582,12 @@ sub hadoop_partsort {
 
 sub hadoop_matched_partfiles {
   my ($path, $partfile) = @_;
+  my $partfile_dirname = $partfile =~ s/\/[^\/]+$//r;
   my @left_files;
   my @possibilities;
 
-  print STDERR "hadoop_matched_partfiles: inputs   = $ENV{mapred_input_dir}\n";
-  print STDERR "hadoop_matched_partfiles: join     = $path\n";
-  print STDERR "hadoop_matched_partfiles: partfile = $partfile\n";
-
   # We won't be able to do anything until both sides of the join exist.
-  until (@left_files = hadoop_partsort hadoop_ls $ENV{mapred_input_dir}) {
+  until (@left_files = hadoop_partsort hadoop_ls $partfile_dirname) {
     print STDERR "hadoop_matched_partfiles: waiting for input...\n";
     print STDERR "reporter:counter:hadoop_matched_partfiles,left wait,1\n";
     sleep 1;
