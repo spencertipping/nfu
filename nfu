@@ -228,12 +228,11 @@ END {
 # arguments. This is required for --pmap to work correctly.
 my @evaled_code;
 
-sub shell_quote {
-    $_[0] =~ /[^-\/\w]/ ? "'" . ($_[0] =~ s/(['\\])/'\\$1'/gr) . "'"
-  : length $_[0]        ? $_[0]
-  :                       "''"}
+sub shell_quote {join ' ', map /[^-\/\w]/ ? "'" . s/(['\\])/'\\$1'/gr . "'"
+                             : length $_  ? $_
+                             :              "''", @_}
 
-sub quote_self {join ' ', $0, map shell_quote($_), @_}
+sub quote_self {shell_quote $0, @_}
 
 my %explosions = (
   a => '--average',
@@ -460,8 +459,7 @@ sub stateful_unary_fn {
 }
 
 sub exec_with_stdin {
-  open my $fh, '|' . join ' ', map shell_quote($_), @_
-    or die "failed to exec @_";
+  open my $fh, '|' . shell_quote @_ or die "failed to exec @_";
   be_verbose_as_appropriate(length), print $fh $_ while <>;
   close $fh;
 }
@@ -521,7 +519,7 @@ sub hadoop {
   # Generates a hadoop command string, quoting all args as necessary
   join ' ', $ENV{NFU_HADOOP_COMMAND} // "hadoop",
             @_[0, 1],
-            map shell_quote($_), @_ > 2 ? @_[2..$#_] : ();
+            shell_quote(@_ > 2 ? @_[2..$#_] : ());
 }
 
 sub hadoop_ls {
@@ -880,10 +878,11 @@ my %functions = (
   fold => sub {
     my $f = compile_eval_into_function $_[0], 'fold function';
     my @saved;
-    while (my $line = <>) {
-      be_verbose_as_appropriate length $line;
-      chomp $line;
-      if ($f->(split /\t/, $line)) {
+    while (<>) {
+      be_verbose_as_appropriate length;
+      chomp;
+      my $line = $_;
+      if ($f->(split /\t/)) {
         push @saved, $line;
       } else {
         print row(@saved), "\n" if @saved;
@@ -1046,10 +1045,10 @@ my %functions = (
 
   map => sub {
     my $f = compile_eval_into_function $_[0], 'map function';
-    while (my $line = <>) {
-      be_verbose_as_appropriate length $line;
-      chomp $line;
-      my @xs = split /\t/, $line;
+    while (<>) {
+      be_verbose_as_appropriate length;
+      chomp;
+      my @xs = split /\t/;
       print "$_\n" for $f->(@xs);
     }
   },
@@ -1080,21 +1079,23 @@ my %functions = (
 
   keep => sub {
     my $f = compile_eval_into_function $_[0], 'keep function';
-    while (my $line = <>) {
-      be_verbose_as_appropriate length $line;
-      chomp $line;
-      my @xs = split /\t/, $line;
-      print row(@xs), "\n" if $f->(@xs);
+    while (<>) {
+      my $line = $_;
+      be_verbose_as_appropriate length;
+      chomp;
+      my @xs = split /\t/;
+      print $line if $f->(@xs);
     }
   },
 
   remove => sub {
     my $f = compile_eval_into_function $_[0], 'remove function';
-    while (my $line = <>) {
-      be_verbose_as_appropriate length $line;
-      chomp $line;
-      my @xs = split /\t/, $line;
-      print row(@xs), "\n" unless $f->(@xs);
+    while (<>) {
+      my $line = $_;
+      be_verbose_as_appropriate length;
+      chomp;
+      my @xs = split /\t/;
+      print $_ unless $f->(@xs);
     }
   },
 
@@ -1229,18 +1230,23 @@ my %functions = (
     my $less_program = $have_less ? 'less'
                      : $have_more ? 'more' : 'cat';
 
-    exec_with_diamond $less_program;
+    exec_with_stdin $less_program;
   },
 );
 
 my %bracket_handlers = (
-  '' => sub {        join ' ', map shell_quote($_), $0, @_},
-  sh => sub {"sh:" . join ' ', map shell_quote($_), @_},
+  ''   => sub {        shell_quote $0, @_},
+  qq   => sub {        shell_quote @_},
+  sh   => sub {"sh:" . shell_quote @_},
+  find => sub {my $cmd = "find " . shell_quote(@_) . " -print0";
+               split /\0/, join '', qx|$cmd|},
 );
 
 my %bracket_docs = (
-  '' => '  nfu command: [ -gc ]       == "$(nfu --quote -gc)"',
-  sh => 'shell command: sh[ cat foo ] == "sh:cat foo"',
+  ''   => '     nfu command:     [ -gc ]     == "$(nfu --quote -gc)"',
+  qq   => '      quasiquote:   qq[ stuff ]   == "stuff"',
+  sh   => 'shell pseudofile:   sh[ cat foo ] == "sh:cat foo"',
+  find => '       file list: find[ ... ]     == $(find ...) but safer',
 );
 
 # Print usage if the user clearly doesn't know what they're doing.
@@ -1278,19 +1284,20 @@ if (@ARGV ? $ARGV[0] =~ /^-[h?]$/ || $ARGV[0] =~ /^--(usage|help)$/
   print STDERR "\nand prefix commands are:\n\n";
 
   print STDERR "  documentation (not used with normal commands):\n";
-  print STDERR "     --explain           <other-options>\n";
-  print STDERR "     --expand-pseudofile <filename>\n";
-  print STDERR "     --expand-code       <code>\n";
-  print STDERR "     --expand-gnuplot    <gnuplot options>\n";
+  print STDERR "    --explain           <other-options>\n";
+  print STDERR "    --expand-pseudofile <filename>\n";
+  print STDERR "    --expand-code       <code>\n";
+  print STDERR "    --expand-gnuplot    <gnuplot options>\n";
 
   print STDERR "\n  pipeline modifiers:\n";
-  print STDERR "     -Q|--quote  -- quotes args: eval \$(nfu --quote ...)\n";
-  print STDERR "     --use       <file.pl>\n";
-  print STDERR "     --run       <perl code>\n";
+  print STDERR "    -Q|--quote  -- quotes args: eval \$(nfu --quote ...)\n";
+  print STDERR "    --use       <file.pl>\n";
+  print STDERR "    --run       <perl code>\n";
 
   print STDERR "\nargument bracket preprocessing:\n\n";
 
-  printf STDERR "  %4s[ ]    %s\n", $_, $bracket_docs{$_}
+  my $bracket_max = max map length, keys %bracket_docs;
+  printf STDERR "  %${bracket_max}s[ ]    %s\n", $_, $bracket_docs{$_}
   for sort keys %bracket_docs;
 
   my $pseudofile_len = 1 + max map length, keys %pseudofile_docs;
