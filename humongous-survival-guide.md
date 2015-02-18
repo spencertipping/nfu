@@ -329,7 +329,9 @@ are recognized:
 ```sh
 $ nfu http://factual.com                # uses stdout from curl
 $ nfu sh:ls                             # uses stdout from a command
-$ nfu user@host:other-file              # pipe file over ssh -C
+$ nfu [user@]host:other-file            # pipe file over ssh -C
+$ nfu hdfs:/path/to/data                # uses hadoop fs -text
+$ nfu psql:'query'                      # uses psql -c and exports as TSV
 ```
 
 nfu supports pseudofiles everywhere it expects a filename, including in
@@ -369,6 +371,12 @@ difficult due to nested quotation. To get around this, nfu provides the
 
 ```sh
 $ nfu --repeat 10 sh:"$(nfu --quote README.md -m 'split /\W+/, %0')"
+```
+
+This is clunky, so nfu goes a step further and provides bracket syntax:
+
+```sh
+$ nfu --repeat 10 nfu[ README.md -m 'split /\W+/, %0' ]
 ```
 
 ### Keyed joins
