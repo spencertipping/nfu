@@ -563,7 +563,9 @@ sub hadoop_ls {
   my $ls_command = hadoop('fs', '-ls', @_)
              . " | grep -v '^Found'"
              . " | perl -wlne 'print +(split \" \",\$_,8)[7]'";
-  grep /\/[^_][^\/]*$/, split /\n/, ''.qx/$ls_command/;
+  my $ls_output = ''.qx/$command/;
+  die "hadoop ls failed: $?" if $?;
+  grep /\/[^_][^\/]*$/, split /\n/, $ls_output;
 }
 
 sub gcd {
