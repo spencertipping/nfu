@@ -1088,7 +1088,7 @@ my %functions = (
     }
 
     while (<>) {
-      be_verbose_as_appropriate;
+      be_verbose_as_appropriate length;
       select undef, $wout = $wbits, undef, undef;
       ++$i until vec($wout, fileno $fhs[$i % @fhs], 1);
       syswrite $fhs[$i++ % @fhs], $_;
