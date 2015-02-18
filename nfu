@@ -116,15 +116,31 @@ sub expand_filename_shorthands {
   } elsif ($f =~ s/^sh://) {
     # Execute a command and capture stdout
     $result = "$original$f |";
+  } elsif ($f =~ s/^hdfs-ls://) {
+    # Just list a directory. This is used by hdfs: below to provide
+    # indirection.
+    $result = "${original}echo '"
+            . join("\n", map shell_quote($_), hadoop_ls $f)
+            . "' |";
   } elsif ($f =~ s/^hdfs://) {
-    # Use Hadoop commands to read stuff
-    my $fs = join ' ', map shell_quote($_), hadoop_ls $f;
-    $result = "${original}hadoop fs -text $fs |";
+    # Use Hadoop commands to read stuff. The command itself needs to be
+    # deferred because the hdfs path might not exist when the pseudofile is
+    # resolved.
+    $result = "${original}$0 hdfs-ls:" . shell_quote($f)
+                                       . " | xargs hadoop fs -text |";
+  } elsif ($f =~ s/^hdfs-lsjoin://) {
+    # List key-matching partfiles within the directory. This is used by
+    # hdfsjoin: below to provide indirection.
+    $result = "${original}echo '"
+            . join("\n", map shell_quote($_),
+                             hadoop_matched_partfiles $f, $ENV{map_input_file})
+            . "' |";
   } elsif ($f =~ s/^hdfsjoin://) {
-    # Mapside join against corresponding partfile(s)
-    $result = $original
-            . expand_filename_shorthands(
-                hadoop_matched_partfiles $f, $ENV{map_input_file});
+    # Mapside join against corresponding partfile(s); this needs to be deferred
+    # because partition counts are calculated when hdfs-lsjoin: is
+    # dereferenced.
+    $result = "${original}$0 hdfs-lsjoin:" . shell_quote($f)
+                                           . " | xargs $0 |";
   } elsif ($f =~ s/^perl://) {
     # Evaluate a Perl expression
     $f =~ s/'/'"'"'/g;
