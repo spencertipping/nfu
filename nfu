@@ -630,9 +630,7 @@ sub hadoop_matched_partfiles {
                   "hdfsjoin $path", "redundancy", $left_redundancy;
   }
 
-  # Emit a pattern that hadoop fs -ls will know how to expand.
-  my @basenames = map s/^.*\///r, @files_to_read;
-  "hdfs:$path/{" . join(',', @basenames) . "}";
+  @files_to_read;
 }
 
 sub hadoop_tempfile {
