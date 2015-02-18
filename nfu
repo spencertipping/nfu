@@ -1463,7 +1463,7 @@ push @parsed, ['preview'] if !$ENV{NFU_NO_PAGER}    # we can page
 
 if ($explain) {
   # Explain what we would have done with the given command line.
-  printf "file\t%s\n", $_ for @ARGV;
+  printf "file\t%s\n", $_ =~ s/#.*\n//gr for @ARGV;
   printf "--%s\t%s\n", ${$_}[0], join "\t",
                                  map "'$_'", @{$_}[1 .. $#$_] for @parsed;
 } elsif (@parsed) {
