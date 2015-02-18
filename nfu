@@ -705,9 +705,8 @@ sub hadoop_into {
   # 1. Hadoop streaming might chop long arguments sooner than bash.
   # 2. It word-splits differently from bash, which breaks shell_quote.
 
-  my $tmp_path     = tmpnam =~ s/\/[^\/]+$/\//r;
-  my $mapper_file  = $tmp_path . random128;
-  my $reducer_file = $tmp_path . random128;
+  my $mapper_file  = tmpnam;
+  my $reducer_file = tmpnam;
 
   open my $mapper_fh,  '>', $mapper_file
     or die "failed to create tempfile $mapper_file for map job: $!";
