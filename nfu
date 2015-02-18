@@ -108,7 +108,7 @@ sub expand_filename_shorthands {
                    =~ s/^(.*\.xz)/cat '$1' | xz -d/ri
                    =~ s/^(.*\.lzo)/cat '$1' | lzop -d/ri;
     $result = $piped =~ /\|/ ? "$original$piped |" : $piped;
-  } elsif ($f =~ s/^(?:http(s?):)?\/\//"http" . ($1 || '') . ":\/\/"/e) {
+  } elsif ($f =~ /^https?:\/\//) {
     # Assume a URL and curl it
     $f = shell_quote $f;
     $result = "${original}curl $f |";
