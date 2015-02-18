@@ -582,8 +582,21 @@ sub hadoop_partsort {
 
 sub hadoop_matched_partfiles {
   my ($path, $partfile) = @_;
-  my @left_files    = hadoop_partsort hadoop_ls $ENV{mapred_input_dir};
-  my @possibilities = hadoop_partsort hadoop_ls $path;
+  my @left_files;
+  my @possibilities;
+
+  # We won't be able to do anything until both sides of the join exist.
+  until (@left_files = hadoop_partsort hadoop_ls $ENV{mapred_input_dir}) {
+    print STDERR "hadoop_matched_partfiles: waiting for input...\n";
+    print STDERR "reporter:counter:hadoop_matched_partfiles,left wait,1\n";
+    sleep 1;
+  }
+
+  until (@possibilities = hadoop_partsort hadoop_ls $path) {
+    print STDERR "hadoop_matched_partfiles: waiting for join data...\n";
+    print STDERR "reporter:counter:hadoop_matched_partfiles,right wait,1\n";
+    sleep 1;
+  }
 
   my $n = hadoop_partfile_n $partfile;
   unless ($n < @left_files && $left_files[$n] eq $partfile) {
