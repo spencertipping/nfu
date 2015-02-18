@@ -120,7 +120,7 @@ sub expand_filename_shorthands {
     # Just list a directory. This is used by hdfs: below to provide
     # indirection.
     $result = "${original}echo '"
-            . join("\n", map shell_quote($_), hadoop_ls $f)
+            . join("\n", map "hdfs:" . shell_quote($_), hadoop_ls $f)
             . "' |";
   } elsif ($f =~ s/^hdfs://) {
     # Use Hadoop commands to read stuff. The command itself needs to be
@@ -132,7 +132,7 @@ sub expand_filename_shorthands {
     # List key-matching partfiles within the directory. This is used by
     # hdfsjoin: below to provide indirection.
     $result = "${original}echo '"
-            . join("\n", map shell_quote($_),
+            . join("\n", map "hdfs:" . shell_quote($_),
                              hadoop_matched_partfiles $f, $ENV{map_input_file})
             . "' |";
   } elsif ($f =~ s/^hdfsjoin://) {
