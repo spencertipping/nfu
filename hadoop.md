@@ -11,11 +11,16 @@ does this by providing three Hadoop-related commands:
 The "mapper" and "reducer" arguments are arbitrary shell commands that may or
 may not involve nfu. "reducer" can be set to `NONE` to run a map-only job.
 
+Normally you'd write the mapper and reducer either as external commands, or by
+using `nfu --quote ...` or `nfu -Q...`. However, nfu provides a shorthand
+notation for quoted forms: `[ -gc ]` is the same as `"$(nfu --quote -gc)"`.
+
 Hadoop jobs support some magic to simplify data transfer:
 
 ```sh
 # upload from stdin
 $ seq 100 | nfu --hadoopcat "$(nfu --quote -m 'row %0, %0 + 1')" NONE
+$ seq 100 | nfu --hadoopcat [ -m 'row %0, %0 + 1' ] NONE
 
 # upload from pseudofiles
 $ nfu sh:'seq 100' --hadoopcat ...
@@ -31,9 +36,9 @@ downloading/uploading all of the intermediate results:
 
 ```sh
 # two hadoop jobs; intermediate results stay on HDFS and are never downloaded
-$ seq 100 | nfu --hadoop "$(nfu -Qm 'row %0 % 10, %0 + 1')" \
-                         "$(nfu -Qgc)" \
-                --hadoopcat "$(nfu -C)" NONE
+$ seq 100 | nfu --hadoop [ -m 'row %0 % 10, %0 + 1' ] \
+                         [ -gc ] \
+                --hadoopcat [ -C ] NONE
 ```
 
 nfu detects when it's being run as a hadoop streaming job and changes its
@@ -41,7 +46,7 @@ verbose behavior to create hadoop counters. This means you can get the same
 kind of throughput statistics by using the `-v` option:
 
 ```sh
-$ seq 10000 | nfu --hadoopcat "$(nfu -Qvgc)" NONE
+$ seq 10000 | nfu --hadoopcat [ -vgc ] NONE
 ```
 
 Because `hdfs:` is a pseudofile prefix, you can also transparently download
@@ -65,13 +70,13 @@ Here's an example of how you might use it:
 # won't partition your mapper outputs.
 $ nfu sh:'shuf /usr/share/dict/words' \
   --take 10000 \
-  --hadoopinto "$(nfu -Qvm 'row %0, length %0')" \
-               "$(nfu -Qv)" \
+  --hadoopinto [ -vm 'row %0, length %0' ] \
+               [ -v ] \
                /tmp/nfu-jointest
 
 # now inner-join against that data
 $ nfu /usr/share/dict/words \
-  --hadoopcat "$(nfu -Qvi0 hdfsjoin:/tmp/nfu-jointest)" NONE
+  --hadoopcat [ -vi0 hdfsjoin:/tmp/nfu-jointest ] NONE
 ```
 
 ## Examples
@@ -82,12 +87,12 @@ $ nfu hadoop.md -m  'map row($_, 1), split /\s+/, %0' \
                 -gA 'row $_, sum @{%1}'
 
 # process on hadoop, download outputs:
-$ nfu hadoop.md --hadoopcat "$(nfu -Qm 'map row($_, 1), split /\s+/, %0')" \
-                            "$(nfu -QA 'row $_, sum @{%1}')"
+$ nfu hadoop.md --hadoopcat [ -m 'map row($_, 1), split /\s+/, %0' ] \
+                            [ -A 'row $_, sum @{%1}' ]
 
 # leave on HDFS, download separately using hdfs: pseudofile
-$ nfu hadoop.md --hadoopinto "$(nfu -Qm 'map row($_, 1), split /\s+/, %0')" \
-                             "$(nfu -QA 'row $_, sum @{%1}')" \
+$ nfu hadoop.md --hadoopinto [ -m 'map row($_, 1), split /\s+/, %0' ] \
+                             [ -A 'row $_, sum @{%1}' ] \
                              /tmp/nfu-wordcount-outputs
 $ nfu hdfs:/tmp/nfu-wordcount-outputs -g
 ```
