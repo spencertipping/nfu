@@ -1452,7 +1452,8 @@ while (@args_to_parse) {
 
 if ($quote_self) {
   # Quote all other arguments so a shell will parse them correctly.
-  print quote_self(map(('--run', $_), @evaled_code),
+  print quote_self($verbose ? ('--verbose') : (),
+                   map(('--run', $_), @evaled_code),
                    map(("--$$_[0]", @$_[1..$#$_]), @parsed),
                    @ARGV), "\n";
   exit 0;
