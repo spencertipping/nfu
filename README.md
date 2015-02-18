@@ -6,7 +6,7 @@ stuff on HDFS and gather the results into a sorted/uniqued text file:
 
 ```sh
 $ nfu psql:'select * from mytable' \
-      -i0 nfu[ http://data.com/csv -F, ] \
+      -i0 nfu[ http://data.com/csv -F , ] \
       --hadoopcat [ -i0 hdfsjoin:/path/to/hdfs/data ] \
                   [ -gcf1. ] \
       -g \
