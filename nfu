@@ -1291,23 +1291,29 @@ if (@ARGV && $ARGV[0] =~ /^--expand/) {
   exit 0;
 }
 
-my $reader        = undef;
-my @parsed        = ();
-my $explain       = 0;
-my @args_to_parse = @ARGV;
+my @args_to_parse;
 
-@ARGV = ();
+while (@ARGV) {
+  my $x = shift @ARGV;
+  if ($x eq '[') {
+    my @xs;
+    push @xs, shift @ARGV while @ARGV && $ARGV[0] ne ']';
+    shift @ARGV;
+    unshift @ARGV, shell_quote join ' ', map shell_quote($_), $0, @xs;
+  } else {
+    push @args_to_parse, $x;
+  }
+}
 
 sub explode {
   return $_[0] unless $_[0] =~ s/^-([^-])/$1/;
   map {$explosions{$_} // $_} grep length, split /([-+.\d]*),?/, $_[0];
 }
 
-# First parse through all of the options, pull out stray files, and replace
-# @ARGV. This enables <> in the worker subs. (The "right way" to do this would
-# be to chain the commands' inputs; then I could remove the branch in the
-# for-loop below. But I'm too lazy.)
+my @parsed;
 my $quote_self = 0;
+my $explain    = 0;
+
 while (@args_to_parse) {
   unshift @args_to_parse, explode shift @args_to_parse;
   (my $command = shift @args_to_parse) =~ s/^--//;
@@ -1363,6 +1369,8 @@ if ($explain) {
   printf "--%s\t%s\n", ${$_}[0], join "\t",
                                  map "'$_'", @{$_}[1 .. $#$_] for @parsed;
 } elsif (@parsed) {
+  my $reader = undef;
+
   # Note: the loop below uses pipe/fork/dup2 instead of a more idiomatic Open2
   # call. I don't have a good reason for this other than to figure out how the
   # low-level stuff worked.
