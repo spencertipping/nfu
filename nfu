@@ -711,8 +711,8 @@ sub hadoop_into {
            @self_dep,
            @input_files,
            '-output',  $outfile,
-           '-mapper',  $transformed_mapper,
-           '-reducer', $transformed_reducer);
+           '-mapper',  '/bin/bash -c ' . shell_quote($transformed_mapper),
+           '-reducer', '/bin/bash -c ' . shell_quote($transformed_reducer));
 
   system $hadoop_command . ' 1>&2'
     and die "failed to execute hadoop command $hadoop_command: $!";
