@@ -10,7 +10,9 @@ use Time::HiRes qw/time/;
 use POSIX       qw/dup2 mkfifo setsid :sys_wait_h/;
 use File::Temp  qw/tmpnam/;
 
-use constant VERBOSE_INTERVAL => 30;
+use constant VERBOSE_INTERVAL        => 30;
+use constant HADOOP_VERBOSE_INTERVAL => 250;
+use constant DELAY_BEFORE_VERBOSE    => 500;
 
 ++$|;
 
@@ -195,6 +197,12 @@ our $verbose_command = '';
 our @verbose_args;
 our $verbose_command_formatted = undef;
 our $inside_hadoop_job         = length $ENV{mapred_job_id};
+our $verbose_interval          = $inside_hadoop_job ? HADOOP_VERBOSE_INTERVAL
+                                                    : VERBOSE_INTERVAL;
+our $empirical_verbosity       = 0;
+
+$verbose ||= $inside_hadoop_job;
+$verbose ||= length $ENV{NFU_ALWAYS_VERBOSE};
 
 our $last_verbose_report = 0;
 our $verbose_row         = 0;
@@ -211,12 +219,15 @@ sub be_verbose_as_appropriate {
   $n_bytes += $record_length;
   my $now = time;
   return unless $record_length == 0
-             || ($now - $last_verbose_report) * 1000 > VERBOSE_INTERVAL;
+             || ($now - $last_verbose_report) * 1000 > $verbose_interval;
 
   $last_verbose_report = $now;
   $verbose_command_formatted //= join ' ', $verbose_command, @verbose_args;
   $start_time //= $now;
-  my $runtime = $now - $start_time || 1;
+  my $runtime = $now - $start_time || 0.001;
+
+  return if $runtime * 1000 < DELAY_BEFORE_VERBOSE;
+  ++$empirical_verbosity;
 
   unless ($inside_hadoop_job) {
     # Print status updates straight to the terminal
@@ -232,7 +243,8 @@ sub be_verbose_as_appropriate {
     # better because Hadoop counters are integers, so they'll suffer from
     # truncation for fractional quantities.
     $verbose_command_formatted =~ s/[,\n]/_/g;
-    printf STDERR "reporter:counter:%s,%s,%d\n", $verbose_command_formatted, @$_
+    printf STDERR "reporter:counter:%s,%s,%d\n",
+                  $verbose_command_formatted, @$_
     for (['lines',      $n_lines],
          ['runtime ms', $runtime * 1000],
          ['bytes',      $n_bytes]);
@@ -246,7 +258,7 @@ sub be_verbose_as_appropriate {
 
 END {
   be_verbose_as_appropriate 0;
-  print STDERR "\n" if $verbose;
+  print STDERR "\n" if $empirical_verbosity;
 }
 
 # This variable will keep track of any state accumulated from --use or --run
@@ -288,9 +300,11 @@ my %explosions = (
   p => '--plot',
   P => '--poll',
   q => '--quant',
+  # Q => '--quote'              # handled during option parsing
   s => '--sum',
   S => '--delta',
   T => '--take',
+  # v => '--verbose'            # handled during option parsing
   V => '--variance',
   w => '--with',
 );
@@ -408,6 +422,7 @@ my %env_docs = (
   NFU_SORT_BUFFER      => 'default 256M; size of in-memory sort for -g and -o',
   NFU_SORT_PARALLEL    => 'default 4; number of concurrent sorts to run',
   NFU_SORT_COMPRESS    => 'default none; compression program for sort tempfiles',
+  NFU_ALWAYS_VERBOSE   => 'if set, nfu will be verbose all the time',
   NFU_NO_PAGER         => 'if set, nfu will not use "less" to preview stdout',
   NFU_PMAP_PARALLELISM => 'number of subprocesses for -M',
   NFU_MAX_FILEHANDLES  => 'default 64; maximum #subprocesses for --partition',
@@ -1340,6 +1355,7 @@ my %functions = (
   },
 
   preview => sub {
+    $verbose = 0;               # don't print over the pager
     my $have_less = !system 'which less > /dev/null';
     my $have_more = !system 'which more > /dev/null';
 
@@ -1477,6 +1493,7 @@ while (@ARGV) {
     unshift @ARGV, $bracket_handlers{$x}->(@xs);
   } elsif ($x =~ s/^\^//) {
     # Lift the command (as a short option) into a quoted nfu instance.
+    $x = shell_quote $x;
     unshift @ARGV, ''.qx|$0 --quote -$x|;
   } else {
     push @args_to_parse, $x;
@@ -1510,14 +1527,14 @@ while (@args_to_parse) {
     die "failed to run '$x': $@" if $@;
   } elsif ($command eq 'use') {
     my $x = shift @args_to_parse;
-    my $s = read_file $x;
+    my $s = read_file $x;       # you can --use pseudofiles, woot!
     push @evaled_code, $s;
     eval $s;
     die "failed to use '$x': $@" if $@;
   } elsif ($command eq 'explain') {
     $explain = 1;
   } elsif ($command eq 'verbose' || $command eq 'v') {
-    print STDERR "\033[2J";
+    print STDERR "\033[2J" unless $quote_self;
     $verbose = 1;
   } elsif ($command eq 'quote' || $command eq 'Q') {
     $quote_self = 1;
