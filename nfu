@@ -153,6 +153,12 @@ sub expand_filename_shorthands {
     $query .= "AND tablename LIKE '$f'" if length $f;
     $result = "${original}psql -c " . shell_quote("COPY ($query) TO STDOUT")
                                     . ' |';
+  } elsif ($f =~ s/^sql://) {
+    # sqlite3 query as TSV
+    my ($db, $query) = split /:/, $f, 2;
+    $db = shell_quote $db;
+    $result = "${original}echo " . shell_quote(".mode tabs\n$query;")
+                                 . "| sqlite3 $db |";
   } elsif ($f =~ /(\w*@?[^:]+):(.*)$/) {
     # Access file over SSH. We need to make sure nfu is running on the remote
     # end, since the remote file might be gzipped or some such. Because the
@@ -183,6 +189,7 @@ my %pseudofile_docs = (
   'hdfsjoin:path'   => 'mapside join pseudofile (a subset of hdfs:path)',
   'psql:query'      => 'results of postgres query as TSV',
   'psqls:[pattern]' => 'list of postgres tables owned by you',
+  'sql:db:query'    => 'results of sqlite3 query as TSV',
   'perl:expr'       => 'perl -e \'print "$_\n" for (expr)\'',
   'user@host:x'     => 'remote data access (x can be a pseudofile)',
 );
@@ -363,6 +370,8 @@ my %arity = (
   entropy    => 0,
   psql       => 3,
   psqlinto   => 2,
+  sql        => 3,
+  sqlinto    => 2,
 );
 
 my %usages = (
@@ -416,6 +425,8 @@ my %usages = (
   entropy    => 'running entropy of relative probabilities/frequencies',
   psql       => 'query temporary postgres table: name, schema, query',
   psqlinto   => 'create postgres table: name, schema',
+  sql        => 'query temporary sqlite3 table: name, schema, query',
+  sqlinto    => 'create sqlite3 table: name, schema',
 );
 
 my %env_docs = (
@@ -1352,6 +1363,53 @@ my %functions = (
       and die "psql: failed to execute query against table $tname";
     system "psql -c 'DROP TABLE $tname' 1>&2"
       and die "psql: failed to drop table $tname after running $query";
+  },
+
+  sqlinto => sub {
+    my ($dbt, $schema) = @_;
+    my @pieces    = split /:/, $dbt;
+    my $table     = pop @pieces;
+    my $db        = shell_quote join ':', @pieces;
+    my $fifo_name = tmpnam;
+    mkfifo $fifo_name, 0700 or die "failed to create fifo: $!";
+
+    unless (fork) {
+      system "echo "
+           . shell_quote(".mode tabs\n"
+                       . "create table $table ($schema);\n"
+                       . ".import $fifo_name $table")
+           . "| sqlite3 $db";
+    } else {
+      open my $fh, '>', $fifo_name or die "failed to open fifo into sqlite: $!";
+      be_verbose_as_appropriate(length), $fh->print($_) while <>;
+      close $fh;
+      unlink $fifo_name;
+      print $table, "\n";
+    }
+  },
+
+  sql => sub {
+    my ($dbt, $schema, $query) = @_;
+    my @pieces    = split /:/, $dbt;
+    my $table     = pop @pieces;
+    my $db        = shell_quote join ':', @pieces;
+    my $fifo_name = tmpnam;
+    mkfifo $fifo_name, 0700 or die "failed to create fifo: $!";
+
+    unless (fork) {
+      system "echo "
+           . shell_quote(".mode tabs\n"
+                       . "create table $table ($schema);\n"
+                       . ".import $fifo_name $table\n"
+                       . "$query;\n"
+                       . "drop table $table;")
+           . "| sqlite3 $db";
+    } else {
+      open my $fh, '>', $fifo_name or die "failed to open fifo into sqlite: $!";
+      be_verbose_as_appropriate(length), $fh->print($_) while <>;
+      close $fh;
+      unlink $fifo_name;
+    }
   },
 
   preview => sub {
