@@ -77,8 +77,6 @@ where each command is one of the following:
   -P|--poll       (2) <interval in seconds, command whose output to collect>
      --prepend    (1) <pseudofile; prepends its contents to current stream>
      --preview    (0) 
-     --psql       (3) <query temp postgres table: [+]table, schema|_, query>
-     --psqlinto   (2) <create postgres table: [+]table, schema|_>
   -q|--quant      (1) <number to round to>
   -r|--read       (0) -- reads pseudofiles from the data stream
   -K|--remove     (1) <inverted row filter fn>
@@ -88,8 +86,7 @@ where each command is one of the following:
      --sample     (1) <row selection probability in [0, 1]>
      --sd         (0) -- running standard deviation
      --splot      (1) <gnuplot arguments>
-     --sql        (3) <query temp sqlite3 table: db[:[+]table], schema|_, query>
-     --sqlinto    (2) <create sqlite3 table: db[:[+]table], schema|_>
+  -Q|--sql        (3) <create/query SQL table: db[:[+]table], schema|_, query|_>
   -s|--sum        (0) -- value -> total += value
   -T|--take       (0) -- n to take first n, +n to take last n
      --tee        (1) <shell command; duplicates data to stdin of command>
@@ -104,9 +101,10 @@ and prefix commands are:
     --expand-pseudofile <filename>
     --expand-code       <code>
     --expand-gnuplot    <gnuplot options>
+    --expand-sql        <sql>
 
   pipeline modifiers:
-    -Q|--quote  -- quotes args: eval $(nfu --quote ...)
+    --quote     -- quotes args: eval $(nfu --quote ...)
     --use       <file.pl>
     --run       <perl code>
 
@@ -114,11 +112,11 @@ argument bracket preprocessing:
 
   ^stuff -> [ -stuff ]
 
-      [ ]         nfu command:     [ -gc ]       == "$(nfu -Qgc)"
-  find[ ]           file list: find[ ... ]       == $(find ...) but safer
-   nfu[ ]      nfu pseudofile:  nfu[ perl:0..5 ] == "sh:$(nfu -Q perl:0..5)"
-    qq[ ]          quasiquote:   qq[ stuff ]     == "stuff"
-    sh[ ]    shell pseudofile:   sh[ cat foo ]   == "sh:cat foo"
+      [ ]         nfu command:     [ -gc ]     == "$(nfu --quote -gc)"
+  find[ ]           file list: find[ ... ]     == $(find ...) but safer
+   nfu[ ]      nfu pseudofile:  nfu[ foo ]     == "sh:$(nfu --quote foo)"
+    qq[ ]          quasiquote:   qq[ stuff ]   == "stuff"
+    sh[ ]    shell pseudofile:   sh[ cat foo ] == "sh:cat foo"
 
 pseudofile patterns:
 
@@ -153,6 +151,11 @@ SQL expansions:
   %j -> ' inner join '
   %l -> ' outer left join '
   %r -> ' outer right join '
+
+database prefixes:
+
+  P = PostgreSQL
+  S = SQLite 3
 
 environment variables:
 

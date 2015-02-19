@@ -22,8 +22,8 @@ following idioms are supported:
 - `-H.: ^gcf1.`: a distributed version of `sort | uniq`
 
 Normally you'd write the mapper and reducer either as external commands, or by
-using `nfu --quote ...` or `nfu -Q...`. However, nfu provides two shorthand
-notations for quoted forms:
+using `nfu --quote ...`. However, nfu provides two shorthand notations for
+quoted forms:
 
 - `[ -gc ]` is the same as `"$(nfu --quote -gc)"` (NB: spaces around brackets
   are required)

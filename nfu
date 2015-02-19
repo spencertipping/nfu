@@ -99,6 +99,7 @@ sub hadoop_matched_partfiles;
 sub shell_quote;
 sub expand_sql_shorthands;
 sub expand_sqlite_db;
+sub expand_postgres_db;
 
 sub expand_filename_shorthands {
   # NB: we prepend a shell comment containing the original $f so anyone
@@ -149,25 +150,25 @@ sub expand_filename_shorthands {
     # Evaluate a Perl expression
     $f =~ s/'/'"'"'/g;
     $result = "${original}perl -e 'print \$_, \"\\n\" for ($f)' |";
-  } elsif ($f =~ s/^psql://) {
-    # Run a postgres query, exporting results as TSV
-    $f = expand_sql_shorthands $f;
-    $f =~ shell_quote "COPY ($f) TO STDOUT WITH NULL AS ''";
-    $result = "${original}psql -c $f |";
-  } elsif ($f =~ s/^psqls://) {
-    # Look for postgres tables
-    my $query = "SELECT tablename FROM pg_catalog.pg_tables "
-              . "WHERE tableowner = '$ENV{USER}'";
-    $query .= "AND tablename LIKE '$f'" if length $f;
-    $result = "${original}psql -c " . shell_quote("COPY ($query) TO STDOUT")
-                                    . ' |';
   } elsif ($f =~ s/^sql://) {
-    # sqlite3 query as TSV
+    # Run a postgres or sqlite3 query, exporting results as TSV
     my ($db, $query) = split /:/, $f, 2;
-    $db     = shell_quote expand_sqlite_db $db;
-    $query  = expand_sql_shorthands $query;
-    $result = "${original}echo " . shell_quote(".mode tabs\n$query;")
-                                 . "| sqlite3 $db |";
+    $query = expand_sql_shorthands $query;
+
+    if ($db =~ s/^P//) {
+      # postgres
+      $db     = shell_quote expand_postgres_db $db;
+      $query  = shell_quote "COPY ($f) TO STDOUT WITH NULL AS ''";
+      $result = "${original}psql -c $f $db |";
+    } elsif ($db =~ s/^S//) {
+      # sqlite3
+      $db     = shell_quote expand_sqlite_db $db;
+      $result = "${original}echo " . shell_quote(".mode tabs\n$query;")
+                                   . "| sqlite3 $db |";
+    } else {
+      die "unknown database prefix " . substr($db, 0, 1)
+        . " for pseudofile $original (valid prefixes are P and S)";
+    }
   } elsif ($f =~ /(\w*@?[^:]+):(.*)$/) {
     # Access file over SSH. We need to make sure nfu is running on the remote
     # end, since the remote file might be gzipped or some such. Because the
@@ -317,7 +318,7 @@ my %explosions = (
   p => '--plot',
   P => '--poll',
   q => '--quant',
-  # Q => '--quote'              # handled during option parsing
+  Q => '--sql',
   r => '--read',
   s => '--sum',
   S => '--delta',
@@ -380,10 +381,7 @@ my %arity = (
   preview    => 0,
   pipe       => 1,
   entropy    => 0,
-  psql       => 3,
-  psqlinto   => 2,
   sql        => 3,
-  sqlinto    => 2,
 );
 
 my %usages = (
@@ -436,10 +434,7 @@ my %usages = (
   preview    => '',
   pipe       => 'shell command to pipe through',
   entropy    => 'running entropy of relative probabilities/frequencies',
-  psql       => 'query temp postgres table: [+]table, schema|_, query',
-  psqlinto   => 'create postgres table: [+]table, schema|_',
-  sql        => 'query temp sqlite3 table: db[:[+]table], schema|_, query',
-  sqlinto    => 'create sqlite3 table: db[:[+]table], schema|_',
+  sql        => 'create/query SQL table: db[:[+]table], schema|_, query|_',
 );
 
 my %env_docs = (
@@ -491,7 +486,12 @@ sub expand_sql_shorthands {
 
 sub expand_sqlite_db {
   my $tempdir = tmpnam =~ s/\/[^\/]+$//r;
-  return "$tempdir/nfu-$ENV{USER}-\@sqlite.db" if $_[0] eq '@';
+  return "$tempdir/nfu-$ENV{USER}-sqlite.db" if $_[0] eq '@';
+  return $_[0];
+}
+
+sub expand_postgres_db {
+  return $ENV{USER} if $_[0] eq '@';
   return $_[0];
 }
 
@@ -879,17 +879,17 @@ sub sql_schema_and_buffer {
   @read;
 }
 
-sub sqlite_parse_args {
+sub sql_parse_args {
   my ($dbt, $schema, $query) = @_;
   my @pieces = split /:/, $dbt;
 
   if (@pieces > 1) {
-    my $table  = pop @pieces;
-    my $db     = expand_sqlite_db(join ':', @pieces);
+    my $table = pop @pieces;
+    my $db    = join ':', @pieces;
     ($db, $table, $schema, $query);
   } else {
     # Use a default table called 't' with an automatic index
-    (expand_sqlite_db($pieces[0]), '+t', $schema, $query);
+    ($pieces[0], '+t', $schema, $query);
   }
 }
 
@@ -1453,91 +1453,59 @@ my %functions = (
     }
   },
 
-  psqlinto => sub {
-    my ($tname, $schema) = @_;
-    my @read  = sql_schema_and_buffer $schema;
-    my $index = sql_first_column_index $tname, $schema;
-
-    open my $fh, "| psql -c "
-               . shell_quote("CREATE TABLE $tname ($schema);\n"
-                           . "COPY $tname FROM STDIN;\n"
-                           . $index)
-               . " 1>&2"
-      or die "psqlinto: failed to open psql for table $tname: $!";
-
-    write_buffer_and_stdin $fh, @read;
-    close $fh;
-    print "psql:select * from $tname\n";
-  },
-
-  psql => sub {
-    my ($tname, $schema, $query) = @_;
-    my @read  = sql_schema_and_buffer $schema;
-    my $index = sql_first_column_index $tname, $schema;
-    $query = expand_sql_shorthands $query;
-
-    open my $fh, "| psql -c "
-               . shell_quote("CREATE TABLE $tname ($schema);\n"
-                           . "COPY $tname FROM STDIN;\n"
-                           . $index
-                           . "COPY ($query) TO STDOUT WITH NULL AS '';\n"
-                           . "DROP TABLE $tname;\n")
-               . " 1>&2"
-      or die "psql: failed to open psql for table $tname: $!";
-
-    write_buffer_and_stdin $fh, @read;
-    close $fh;
-  },
-
-  sqlinto => sub {
-    my ($db, $table, $schema) = sqlite_parse_args @_;
-    my $fifo_name = tmpnam;
-    mkfifo $fifo_name, 0700 or die "failed to create fifo: $!";
-
-    my @read  = sql_schema_and_buffer $schema;
-    my $index = sql_first_column_index $table, $schema;
-
-    my $pid = fork;
-    unless ($pid) {
-      system "echo "
-           . shell_quote(".mode tabs\n"
-                       . "create table $table ($schema);\n"
-                       . ".import $fifo_name $table\n"
-                       . $index)
-           . "| sqlite3 " . shell_quote $db;
-    } else {
-      open my $fh, '>', $fifo_name or die "failed to open fifo into sqlite: $!";
-      write_buffer_and_stdin $fh, @read;
-      close $fh;
-      unlink $fifo_name;
-      waitpid $pid, 0;
-      print "sql:$db:select * from $table\n";
-    }
-  },
-
   sql => sub {
-    my ($db, $table, $schema, $query) = sqlite_parse_args @_;
-    my $fifo_name = tmpnam;
-    mkfifo $fifo_name, 0700 or die "failed to create fifo: $!";
-
+    my ($db, $table, $schema, $query) = sql_parse_args @_;
     my @read  = sql_schema_and_buffer $schema;
     my $index = sql_first_column_index $table, $schema;
     $query = expand_sql_shorthands $query;
 
-    unless (fork) {
-      system "echo "
-           . shell_quote(".mode tabs\n"
-                       . "create table $table ($schema);\n"
-                       . ".import $fifo_name $table\n"
-                       . $index
-                       . "$query;\n"
-                       . "drop table $table;\n")
-           . "| sqlite3 " . shell_quote $db;
-    } else {
-      open my $fh, '>', $fifo_name or die "failed to open fifo into sqlite: $!";
+    if ($db =~ s/^P//) {
+      # postgres
+      $db = shell_quote expand_postgres_db $db;
+      my $q = $query eq '_' ? ''
+                            : "COPY ($query) TO STDOUT WITH NULL AS '';\n"
+                            . "DROP TABLE $table;\n";
+
+      open my $fh, "| psql -c "
+                 . shell_quote("DROP TABLE IF EXISTS $table;\n"
+                             . "CREATE TABLE $table ($schema);\n"
+                             . "COPY $table FROM STDIN;\n"
+                             . $index
+                             . $q)
+                 . " $db 1>&2"
+        or die "psql: failed to open psql for table $table $!";
+
       write_buffer_and_stdin $fh, @read;
       close $fh;
-      unlink $fifo_name;
+      print "sql:P$db:select * from $table\n" unless length $q;
+    } elsif ($db =~ s/^S//) {
+      # sqlite3
+      my $fifo_name = tmpnam;
+      mkfifo $fifo_name, 0700 or die "failed to create fifo: $!";
+
+      my $child = fork;
+      unless ($child) {
+        system "echo "
+             . shell_quote(".mode tabs\n"
+                         . "DROP TABLE IF EXISTS $table;\n"
+                         . "CREATE TABLE $table ($schema);\n"
+                         . ".import $fifo_name $table\n"
+                         . $index
+                         . ($query eq '_' ? ''
+                                          : "$query;\n"
+                                          . "DROP TABLE $table;\n"))
+             . "| sqlite3 " . shell_quote expand_sqlite_db $db;
+      } else {
+        open my $fh, '>', $fifo_name or die "failed to open fifo into sqlite: $!";
+        write_buffer_and_stdin $fh, @read;
+        close $fh;
+        unlink $fifo_name;
+        waitpid $child, 0;
+        print "sql:S$db:select * from $table\n" if $query eq '_';
+      }
+    } else {
+      die "unknown SQL prefix: " . substr($db, 0, 1)
+        . " (valid prefixes are P and S)";
     }
   },
 
@@ -1563,11 +1531,11 @@ my %bracket_handlers = (
 );
 
 my %bracket_docs = (
-  ''   => '     nfu command:     [ -gc ]       == "$(nfu -Qgc)"',
-  nfu  => '  nfu pseudofile:  nfu[ perl:0..5 ] == "sh:$(nfu -Q perl:0..5)"',
-  qq   => '      quasiquote:   qq[ stuff ]     == "stuff"',
-  sh   => 'shell pseudofile:   sh[ cat foo ]   == "sh:cat foo"',
-  find => '       file list: find[ ... ]       == $(find ...) but safer',
+  ''   => '     nfu command:     [ -gc ]     == "$(nfu --quote -gc)"',
+  nfu  => '  nfu pseudofile:  nfu[ foo ]     == "sh:$(nfu --quote foo)"',
+  qq   => '      quasiquote:   qq[ stuff ]   == "stuff"',
+  sh   => 'shell pseudofile:   sh[ cat foo ] == "sh:cat foo"',
+  find => '       file list: find[ ... ]     == $(find ...) but safer',
 );
 
 # Print usage if the user clearly doesn't know what they're doing.
@@ -1609,9 +1577,10 @@ if (@ARGV ? $ARGV[0] =~ /^-[h?]$/ || $ARGV[0] =~ /^--(usage|help)$/
   print STDERR "    --expand-pseudofile <filename>\n";
   print STDERR "    --expand-code       <code>\n";
   print STDERR "    --expand-gnuplot    <gnuplot options>\n";
+  print STDERR "    --expand-sql        <sql>\n";
 
   print STDERR "\n  pipeline modifiers:\n";
-  print STDERR "    -Q|--quote  -- quotes args: eval \$(nfu --quote ...)\n";
+  print STDERR "    --quote     -- quotes args: eval \$(nfu --quote ...)\n";
   print STDERR "    --use       <file.pl>\n";
   print STDERR "    --run       <perl code>\n";
 
@@ -1636,6 +1605,11 @@ if (@ARGV ? $ARGV[0] =~ /^-[h?]$/ || $ARGV[0] =~ /^--(usage|help)$/
   printf STDERR "  %2s -> '%s'\n", $_, $sql_aliases{$_}
   for sort keys %sql_aliases;
 
+  print STDERR "\ndatabase prefixes:\n\n";
+  printf STDERR "  %s = %s\n", @$_
+  for ['P' => 'PostgreSQL'],
+      ['S' => 'SQLite 3'];
+
   my $env_len = 1 + max map length, keys %env_docs;
   print STDERR "\nenvironment variables:\n\n";
   printf STDERR "  %-${env_len}s %s\n", $_, $env_docs{$_}
@@ -1656,6 +1630,8 @@ if (@ARGV && $ARGV[0] =~ /^--expand/) {
     print expand_eval_shorthands($x), "\n";
   } elsif ($command =~ /-gnuplot$/) {
     print expand_gnuplot_options($x), "\n";
+  } elsif ($command =~ /-sql$/) {
+    print expand_sql_shorthands($x), "\n";
   } else {
     print STDERR "unknown expansion command: $command\n";
     exit 1;
@@ -1727,7 +1703,7 @@ while (@args_to_parse) {
   } elsif ($command eq 'verbose' || $command eq 'v') {
     print STDERR "\033[2J" unless $quote_self;
     $verbose = 1;
-  } elsif ($command eq 'quote' || $command eq 'Q') {
+  } elsif ($command eq 'quote') {
     $quote_self = 1;
   } else {
     if ($quote_self) {
