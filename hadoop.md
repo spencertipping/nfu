@@ -19,11 +19,16 @@ following idioms are supported:
 - `-H@`: hadoop and output filename
 - `-H.`: hadoop and cat output
 - `-H@::`: reshard data, as in preparation for a mapside join
-- `-H.: [ -gcf1. ]`: a distributed version of `sort | uniq`
+- `-H.: ^gcf1.`: a distributed version of `sort | uniq`
 
 Normally you'd write the mapper and reducer either as external commands, or by
-using `nfu --quote ...` or `nfu -Q...`. However, nfu provides a shorthand
-notation for quoted forms: `[ -gc ]` is the same as `"$(nfu --quote -gc)"`.
+using `nfu --quote ...` or `nfu -Q...`. However, nfu provides two shorthand
+notations for quoted forms:
+
+- `[ -gc ]` is the same as `"$(nfu --quote -gc)"` (NB: spaces around brackets
+  are required)
+- `^gc` is the same as `[ -gc ]`
+
 Quoted nfu jobs can involve `--use` clauses, which are turned into `--run`
 before hadoop sends the command to the workers.
 
@@ -48,8 +53,8 @@ downloading/uploading all of the intermediate results:
 
 ```sh
 # two hadoop jobs; intermediate results stay on HDFS and are never downloaded
-$ seq 100 | nfu -H@ [ -m 'row %0 % 10, %0 + 1' ] [ -gc ]
-                -H. [ -C ] _
+$ seq 100 | nfu -H@ [ -m 'row %0 % 10, %0 + 1' ] ^gc
+                -H. ^C _
 ```
 
 nfu detects when it's being run as a hadoop streaming job and changes its
@@ -57,7 +62,7 @@ verbose behavior to create hadoop counters. This means you can get the same
 kind of throughput statistics by using the `-v` option:
 
 ```sh
-$ seq 10000 | nfu --hadoop . [ -vgc ] _
+$ seq 10000 | nfu --hadoop . ^vgc _
 ```
 
 Because `hdfs:` is a pseudofile prefix, you can also transparently download
@@ -83,7 +88,7 @@ $ nfu sh:'shuf /usr/share/dict/words' \
   --take 10000 \
   --hadoop /tmp/nfu-jointest \
            [ -vm 'row %0, length %0' ] \
-           [ -v ] \
+           ^v \
 
 # now inner-join against that data
 $ nfu /usr/share/dict/words \

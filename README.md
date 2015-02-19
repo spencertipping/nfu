@@ -7,7 +7,7 @@ HDFS and gather the results into a sorted/uniqued text file:
 ```sh
 $ nfu psql:'select * from mytable' \
       -i0 nfu[ http://data.com/csv -F , ] \
-      -H. [ -i0 hdfsjoin:/path/to/hdfs/data ] [ -gcf1. ] \
+      -H. [ -i0 hdfsjoin:/path/to/hdfs/data ] ^gcf1. \
       -g \
   > output
 ```
