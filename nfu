@@ -820,7 +820,7 @@ sub sql_infer_column_type {
 
 sub sql_infer_schema {
   # Takes a list of TSV lines and generates a table schema that will store
-  # them. The first column is always the primary key.
+  # them.
   my $n       = max map scalar(split /\t/), @_;
   my @columns = map [], 1 .. $n;
   for (@_) {
@@ -829,8 +829,7 @@ sub sql_infer_schema {
   }
 
   my @types = map sql_infer_column_type(@$_), @columns;
-  join ', ', map sprintf("f%d %s%s", $_, $types[$_], $_ ? '' : ' primary key'),
-                 0 .. $#columns;
+  join ', ', map sprintf("f%d %s", $_, $types[$_]), 0 .. $#columns;
 }
 
 my %functions = (
