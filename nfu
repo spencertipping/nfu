@@ -429,10 +429,10 @@ my %usages = (
   preview    => '',
   pipe       => 'shell command to pipe through',
   entropy    => 'running entropy of relative probabilities/frequencies',
-  psql       => 'query temporary postgres table: name, schema|_, query',
-  psqlinto   => 'create postgres table: name, schema|_',
-  sql        => 'query temporary sqlite3 table: name, schema|_, query',
-  sqlinto    => 'create sqlite3 table: name, schema|_',
+  psql       => 'query temp postgres table: [+]table, schema|_, query',
+  psqlinto   => 'create postgres table: [+]table, schema|_',
+  sql        => 'query temp sqlite3 table: db[:[+]table], schema|_, query',
+  sqlinto    => 'create sqlite3 table: db[:[+]table], schema|_',
 );
 
 my %env_docs = (
@@ -874,8 +874,8 @@ sub sqlite_parse_args {
     my $db     = shell_quote join ':', @pieces;
     ($db, $table, $schema, $query);
   } else {
-    # Use a default table called 't'
-    ($pieces[0], 't', $schema, $query);
+    # Use a default table called 't' with an automatic index
+    ($pieces[0], '+t', $schema, $query);
   }
 }
 
@@ -886,9 +886,14 @@ sub write_buffer_and_stdin {
 }
 
 sub sql_first_column_index {
+  # WARNING: this function modifies its first argument
   my ($table, $schema) = @_;
   my $column = $schema =~ s/\s.*$//r;
-  "CREATE INDEX $table$column ON $table($column)";
+  my $index  = $table =~ s/^\+//
+    ? "CREATE INDEX $table$column ON $table($column);"
+    : '';
+  $_[0] = $table;
+  $index;
 }
 
 my %functions = (
@@ -1430,7 +1435,7 @@ my %functions = (
 
     open my $fh, "| psql -c "
                . shell_quote("CREATE TABLE $tname ($schema);\n"
-                           . "$index;\n"
+                           . "$index\n"
                            . "COPY $tname FROM STDIN;")
                . " 1>&2"
       or die "psqlinto: failed to open psql for table $tname: $!";
@@ -1448,7 +1453,7 @@ my %functions = (
 
     open my $fh, "| psql -c "
                . shell_quote("CREATE TABLE $tname ($schema);\n"
-                           . "$index;\n"
+                           . "$index\n"
                            . "COPY $tname FROM STDIN;\n"
                            . "COPY ($query) TO STDOUT WITH NULL AS '';\n"
                            . "DROP TABLE $tname;")
@@ -1471,7 +1476,7 @@ my %functions = (
       system "echo "
            . shell_quote(".mode tabs\n"
                        . "create table $table ($schema);\n"
-                       . "$index;\n"
+                       . "$index\n"
                        . ".import $fifo_name $table")
            . "| sqlite3 $db";
     } else {
@@ -1496,7 +1501,7 @@ my %functions = (
       system "echo "
            . shell_quote(".mode tabs\n"
                        . "create table $table ($schema);\n"
-                       . "$index;\n"
+                       . "$index\n"
                        . ".import $fifo_name $table\n"
                        . "$query;\n"
                        . "drop table $table;")

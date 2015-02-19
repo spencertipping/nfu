@@ -38,3 +38,7 @@ $ nfu psql:'select * from squares' -OT5
 If you specify `_` as the schema, nfu will scan the first 20 lines of input and
 come up with a set of columns whose names are `f0`, `f1`, ..., and whose types
 are one of `text`, `integer`, and `real`.
+
+## Indexing
+nfu will create a non-unique index on the table's first column if you prepend
+`+` to the table name.
