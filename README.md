@@ -77,9 +77,10 @@ where each command is one of the following:
   -P|--poll       (2) <interval in seconds, command whose output to collect>
      --prepend    (1) <pseudofile; prepends its contents to current stream>
      --preview    (0) 
-     --psql       (3) <query temporary postgres table: name, schema, query>
-     --psqlinto   (2) <create postgres table: name, schema>
+     --psql       (3) <query temp postgres table: [+]table, schema|_, query>
+     --psqlinto   (2) <create postgres table: [+]table, schema|_>
   -q|--quant      (1) <number to round to>
+  -r|--read       (0) -- reads pseudofiles from the data stream
   -K|--remove     (1) <inverted row filter fn>
      --repeat     (2) <repeat count, pseudofile to repeat>
   -G|--rgroup     (0) -- sorts descending, takes optional column list
@@ -87,8 +88,8 @@ where each command is one of the following:
      --sample     (1) <row selection probability in [0, 1]>
      --sd         (0) -- running standard deviation
      --splot      (1) <gnuplot arguments>
-     --sql        (3) <query temporary sqlite3 table: name, schema, query>
-     --sqlinto    (2) <create sqlite3 table: name, schema>
+     --sql        (3) <query temp sqlite3 table: db[:[+]table], schema|_, query>
+     --sqlinto    (2) <create sqlite3 table: db[:[+]table], schema|_>
   -s|--sum        (0) -- value -> total += value
   -T|--take       (0) -- n to take first n, +n to take last n
      --tee        (1) <shell command; duplicates data to stdin of command>
@@ -142,6 +143,16 @@ gnuplot expansions:
   %l -> ' with lines'
   %t -> ' title '
   %u -> ' using '
+
+SQL expansions:
+
+  %\* -> ' select * from '
+  %c -> ' select count(1) from '
+  %d -> ' select distinct * from '
+  %g -> ' group by '
+  %j -> ' inner join '
+  %l -> ' outer left join '
+  %r -> ' outer right join '
 
 environment variables:
 

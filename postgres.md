@@ -5,7 +5,7 @@ postgres tables. It supports two commands:
 - `--psql table 'schema' 'query'`: Create `table` with `schema`, load it up
   from stdin, export SQL `query` results as TSV to stdout, and delete `table`.
 - `--psqlinto table 'schema'`: Create `table` with `schema`, load it up from
-  stdin, and print table name.
+  stdin, and print a pseudofile that will read the data.
 
 `--psql` is useful when you want to use postgres as a temporary workspace,
 whereas `--psqlinto` leaves the table around for later use.

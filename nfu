@@ -299,6 +299,7 @@ my %explosions = (
   F => '--fieldsplit',
   g => '--group',
   G => '--rgroup',
+  # h => '--help'               # handled during option parsing
   H => '--hadoop',
   i => '--index',
   I => '--indexouter',
@@ -317,6 +318,7 @@ my %explosions = (
   P => '--poll',
   q => '--quant',
   # Q => '--quote'              # handled during option parsing
+  r => '--read',
   s => '--sum',
   S => '--delta',
   T => '--take',
@@ -356,6 +358,7 @@ my %arity = (
   rorder     => 0,
   plot       => 1,
   poll       => 2,
+  read       => 0,
   sum        => 0,
   quant      => 1,
   remove     => 1,
@@ -414,6 +417,7 @@ my %usages = (
   poll       => 'interval in seconds, command whose output to collect',
   sum        => 'value -> total += value',
   quant      => 'number to round to',
+  read       => 'reads pseudofiles from the data stream',
   remove     => 'inverted row filter fn',
   repeat     => 'repeat count, pseudofile to repeat',
   sample     => 'row selection probability in [0, 1]',
@@ -881,7 +885,7 @@ sub sqlite_parse_args {
 
   if (@pieces > 1) {
     my $table  = pop @pieces;
-    my $db     = shell_quote expand_sqlite_db(join ':', @pieces);
+    my $db     = expand_sqlite_db(join ':', @pieces);
     ($db, $table, $schema, $query);
   } else {
     # Use a default table called 't' with an automatic index
@@ -908,6 +912,16 @@ sub sql_first_column_index {
 }
 
 my %functions = (
+  read => sub {
+    while (<>) {
+      chomp;
+      my $f = expand_filename_shorthands $_, 1;
+      open my $fh, $f or die "failed to open pseudofile $_ ($f): $!";
+      be_verbose_as_appropriate(length), print while <$fh>;
+      close $fh;
+    }
+  },
+
   group  => sub {exec_with_diamond 'sort', sort_options @_},
   rgroup => sub {exec_with_diamond 'sort', '-r', sort_options @_},
   order  => sub {exec_with_diamond 'sort', '-g', sort_options @_},
@@ -1453,7 +1467,7 @@ my %functions = (
 
     write_buffer_and_stdin $fh, @read;
     close $fh;
-    print $tname, "\n";
+    print "psql:select * from $tname\n";
   },
 
   psql => sub {
@@ -1483,19 +1497,21 @@ my %functions = (
     my @read  = sql_schema_and_buffer $schema;
     my $index = sql_first_column_index $table, $schema;
 
-    unless (fork) {
+    my $pid = fork;
+    unless ($pid) {
       system "echo "
            . shell_quote(".mode tabs\n"
                        . "create table $table ($schema);\n"
                        . $index
                        . ".import $fifo_name $table")
-           . "| sqlite3 $db";
+           . "| sqlite3 " . shell_quote $db;
     } else {
       open my $fh, '>', $fifo_name or die "failed to open fifo into sqlite: $!";
       write_buffer_and_stdin $fh, @read;
       close $fh;
       unlink $fifo_name;
-      print $table, "\n";
+      waitpid $pid, 0;
+      print "sql:$db:select * from $table\n";
     }
   },
 
@@ -1516,7 +1532,7 @@ my %functions = (
                        . ".import $fifo_name $table\n"
                        . "$query;\n"
                        . "drop table $table;")
-           . "| sqlite3 $db";
+           . "| sqlite3 " . shell_quote $db;
     } else {
       open my $fh, '>', $fifo_name or die "failed to open fifo into sqlite: $!";
       write_buffer_and_stdin $fh, @read;
