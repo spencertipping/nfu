@@ -87,6 +87,8 @@ where each command is one of the following:
      --sample     (1) <row selection probability in [0, 1]>
      --sd         (0) -- running standard deviation
      --splot      (1) <gnuplot arguments>
+     --sql        (3) <query temporary sqlite3 table: name, schema, query>
+     --sqlinto    (2) <create sqlite3 table: name, schema>
   -s|--sum        (0) -- value -> total += value
   -T|--take       (0) -- n to take first n, +n to take last n
      --tee        (1) <shell command; duplicates data to stdin of command>
@@ -109,6 +111,8 @@ and prefix commands are:
 
 argument bracket preprocessing:
 
+  ^stuff -> [ -stuff ]
+
       [ ]         nfu command:     [ -gc ]       == "$(nfu -Qgc)"
   find[ ]           file list: find[ ... ]       == $(find ...) but safer
    nfu[ ]      nfu pseudofile:  nfu[ perl:0..5 ] == "sh:$(nfu -Q perl:0..5)"
@@ -128,6 +132,7 @@ pseudofile patterns:
   psql:query       results of postgres query as TSV
   psqls:[pattern]  list of postgres tables owned by you
   sh:stuff         run sh -c "stuff", take stdout
+  sql:db:query     results of sqlite3 query as TSV
   user@host:x      remote data access (x can be a pseudofile)
 
 gnuplot expansions:
@@ -140,6 +145,7 @@ gnuplot expansions:
 
 environment variables:
 
+  NFU_ALWAYS_VERBOSE    if set, nfu will be verbose all the time
   NFU_HADOOP_COMMAND    hadoop executable; e.g. hadoop jar, hadoop fs -ls
   NFU_HADOOP_OPTIONS    -D options for hadoop streaming jobs
   NFU_HADOOP_STREAMING  absolute location of hadoop-streaming.jar
