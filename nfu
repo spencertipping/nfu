@@ -1460,8 +1460,8 @@ my %functions = (
 
     open my $fh, "| psql -c "
                . shell_quote("CREATE TABLE $tname ($schema);\n"
-                           . $index
-                           . "COPY $tname FROM STDIN;")
+                           . "COPY $tname FROM STDIN;"
+                           . $index)
                . " 1>&2"
       or die "psqlinto: failed to open psql for table $tname: $!";
 
@@ -1478,8 +1478,8 @@ my %functions = (
 
     open my $fh, "| psql -c "
                . shell_quote("CREATE TABLE $tname ($schema);\n"
-                           . $index
                            . "COPY $tname FROM STDIN;\n"
+                           . $index
                            . "COPY ($query) TO STDOUT WITH NULL AS '';\n"
                            . "DROP TABLE $tname;")
                . " 1>&2"
@@ -1502,8 +1502,8 @@ my %functions = (
       system "echo "
            . shell_quote(".mode tabs\n"
                        . "create table $table ($schema);\n"
-                       . $index
-                       . ".import $fifo_name $table")
+                       . ".import $fifo_name $table"
+                       . $index)
            . "| sqlite3 " . shell_quote $db;
     } else {
       open my $fh, '>', $fifo_name or die "failed to open fifo into sqlite: $!";
@@ -1528,8 +1528,8 @@ my %functions = (
       system "echo "
            . shell_quote(".mode tabs\n"
                        . "create table $table ($schema);\n"
-                       . $index
                        . ".import $fifo_name $table\n"
+                       . $index
                        . "$query;\n"
                        . "drop table $table;")
            . "| sqlite3 " . shell_quote $db;
