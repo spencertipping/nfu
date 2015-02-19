@@ -7,8 +7,7 @@ HDFS and gather the results into a sorted/uniqued text file:
 ```sh
 $ nfu psql:'select * from mytable' \
       -i0 nfu[ http://data.com/csv -F , ] \
-      --hadoopcat [ -i0 hdfsjoin:/path/to/hdfs/data ] \
-                  [ -gcf1. ] \
+      -H. [ -i0 hdfsjoin:/path/to/hdfs/data ] [ -gcf1. ] \
       -g \
   > output
 ```
@@ -52,6 +51,7 @@ where each command is one of the following:
   -S|--delta      (0) -- value -> difference from last value
   -D|--drop       (0) -- number of records to drop
      --duplicate  (2) <two shell commands as separate arguments>
+  -e|--each       (1) <template; executes with {} set to each value>
      --entropy    (0) -- running entropy of relative probabilities/frequencies
   -E|--every      (1) <n (returns every nth row)>
   -L|--exp        (0) -- optional base (default e)
@@ -59,9 +59,7 @@ where each command is one of the following:
   -F|--fieldsplit (1) <regexp to use for splitting>
      --fold       (1) <function that returns true when line should be folded>
   -g|--group      (0) -- sorts ascending, takes optional column list
-     --hadoop     (2) <hadoop streaming: mapper, reducer (emits outfiles)>
-     --hadoopcat  (2) <hadoop streaming: mapper, reducer (emits data)>
-     --hadoopinto (3) <hadoop streaming into HDFS: mapper, reducer, outpath>
+  -H|--hadoop     (3) <hadoop streaming: outpath|.|@, mapper|:, reducer|:|_>
   -i|--index      (2) <field index, unsorted pseudofile to join against>
   -I|--indexouter (2) <field index, unsorted pseudofile to join against>
   -j|--join       (2) <field index, sorted pseudofile to join against>

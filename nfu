@@ -267,6 +267,7 @@ my %explosions = (
   F => '--fieldsplit',
   g => '--group',
   G => '--rgroup',
+  H => '--hadoop',
   i => '--index',
   I => '--indexouter',
   j => '--join',
@@ -306,6 +307,7 @@ my %arity = (
   fold       => 1,
   group      => 0,
   rgroup     => 0,
+  hadoop     => 3,
   index      => 2,
   indexouter => 2,
   join       => 2,
@@ -341,9 +343,6 @@ my %arity = (
   preview    => 0,
   pipe       => 1,
   entropy    => 0,
-  hadoop     => 2,
-  hadoopcat  => 2,
-  hadoopinto => 3,
   psql       => 3,
   psqlinto   => 2,
 );
@@ -362,6 +361,7 @@ my %usages = (
   fold       => 'function that returns true when line should be folded',
   group      => 'sorts ascending, takes optional column list',
   rgroup     => 'sorts descending, takes optional column list',
+  hadoop     => 'hadoop streaming: outpath|.|@, mapper|:, reducer|:|_',
   index      => 'field index, unsorted pseudofile to join against',
   indexouter => 'field index, unsorted pseudofile to join against',
   join       => 'field index, sorted pseudofile to join against',
@@ -396,9 +396,6 @@ my %usages = (
   preview    => '',
   pipe       => 'shell command to pipe through',
   entropy    => 'running entropy of relative probabilities/frequencies',
-  hadoop     => 'hadoop streaming: mapper, reducer (emits outfiles)',
-  hadoopcat  => 'hadoop streaming: mapper, reducer (emits data)',
-  hadoopinto => 'hadoop streaming into HDFS: mapper, reducer, outpath',
   psql       => 'query temporary postgres table: name, schema, query',
   psqlinto   => 'create postgres table: name, schema',
 );
@@ -642,12 +639,14 @@ sub find_hadoop_streaming {
 }
 
 sub hadoop_into {
-  die "hadoop_into got (@_) but expected (mapper, reducer, outfile)"
-    unless @_ == 3;
-
-  my ($mapper, $reducer, $outfile) = @_;
+  my ($outfile, $mapper, $reducer) = @_;
   my $streaming_jar = $ENV{NFU_HADOOP_STREAMING} // find_hadoop_streaming;
 
+  # Various shorthands for common cases. Both mapper and reducer being the
+  # identity function is used to repartition stuff, so we want this to be easy
+  # to type and recognize.
+  $mapper  = $0     if $mapper  eq ':';
+  $reducer = $0     if $reducer eq ':';
   $reducer = 'NONE' if $reducer =~ /^[-_]$/;
 
   my @input_files;
@@ -1289,14 +1288,18 @@ my %functions = (
     close for values %fhs;
   },
 
-  hadoop     => sub { print hadoop_into(@_, hadoop_tempfile), "\n" },
-  hadoopinto => sub { print hadoop_into(@_), "\n" },
-
-  hadoopcat => sub {
-    my $filename = hadoop_tempfile;
-    system hadoop('fs', '-text', map s/^hdfs://r,
-                                     hadoop_ls hadoop_into @_, $filename);
-    system hadoop('fs', '-rm', '-r', $filename) . ' 1>&2';
+  hadoop => sub {
+    my ($outfile, $mapper, $reducer) = @_;
+    if ($outfile eq '.') {
+      # Print output data to stdout, then delete outfile
+      my $filename = hadoop_tempfile;
+      system hadoop('fs', '-text',
+        map s/^hdfs://r, hadoop_ls hadoop_into $filename, $mapper, $reducer);
+      system hadoop('fs', '-rm', '-r', $filename) . ' 1>&2';
+    } else {
+      $outfile = hadoop_tempfile if $outfile eq '@';
+      print hadoop_into($outfile, $mapper, $reducer), "\n";
+    }
   },
 
   psqlinto => sub {
