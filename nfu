@@ -313,6 +313,7 @@ my %explosions = (
   m => '--map',
   M => '--pmap',
   n => '--number',
+  N => '--ntiles',
   o => '--order',
   O => '--rorder',
   p => '--plot',
@@ -355,6 +356,7 @@ my %arity = (
   map        => 1,
   pmap       => 1,
   number     => 0,
+  ntiles     => 1,
   order      => 0,
   rorder     => 0,
   plot       => 1,
@@ -409,6 +411,7 @@ my %usages = (
   map        => 'row map fn',
   pmap       => 'row map fn (executed multiple times in parallel)',
   number     => 'prepends line number to each line',
+  ntiles     => 'takes N, produces ntiles of numbers',
   order      => 'sorts ascending by general numeric value',
   rorder     => 'sorts descending by general numeric value',
   plot       => 'gnuplot arguments',
@@ -476,6 +479,7 @@ my %sql_aliases = (
   '%j'  => ' inner join ',
   '%l'  => ' outer left join ',
   '%r'  => ' outer right join ',
+  '%w'  => ' where ',
 );
 
 sub expand_sql_shorthands {
@@ -1368,6 +1372,71 @@ my %functions = (
       chomp;
       print row(++$n, $_), "\n";
     }
+  },
+
+  ntiles => sub {
+    my ($n)        = @_;
+    my $line_count = 0;
+    my $fifo       = tmpnam;
+    mkfifo $fifo, 0700 or die "failed to create fifo: $!";
+    open my $sorted, "sort -g $fifo |"
+      or die "failed to create sort process: $!";
+    open my $fifo_fh, '>', $fifo or die "failed to write to fifo: $!";
+
+    # Push data into the sort process, keeping track of the number of lines.
+    # We'll use this count later to use constant rather than linear space.
+    while (<>) {
+      ++$line_count;
+      be_verbose_as_appropriate(length);
+      $fifo_fh->print($_);
+    }
+    close $fifo_fh;
+    unlink $fifo;
+
+    # Ok, now grab the data for each of the N sampling points. Here's what
+    # we're doing:
+    #
+    # 0           1           2    <- things we grab for 2-tiles
+    # 1 2 3 4 5 6 7 8 9 a b c d    <- data points
+    #
+    # 0          1          2      <- things we grab for 2-tiles
+    # 1 2 3 4 5 6 7 8 9 a b c      <- data points
+    #
+    # 0     1     2     3     4    <- quartiles
+    # 1   2   3   4   5   6   7    <- data points
+    #
+    # To make this work, we just keep track of the previous data point as we're
+    # reading.
+
+    # Normal case
+    my $i        = 0;
+    my $previous = undef;
+    my $max_line = $line_count - 1;
+    while (<$sorted>) {
+      chomp;
+      $previous = $_ unless defined $previous;
+
+      my $break = int($i * $n / $max_line) / $n * $max_line;
+      if ($i >= $break && $i - $break < 1) {
+        # Take this row, performing a weighted average with the previous one:
+        #
+        #   break
+        # x   V           y
+        # |               |
+        # ----|------------
+        #  $w     1-$w
+        #
+        # We want x*(1-$w) + y*$w.
+
+        my $w = $break - int $break || 1;
+        my $v = $previous * (1 - $w) + $_ * $w;
+        print $v, "\n";
+      }
+
+      ++$i;
+      $previous = $_;
+    }
+    close $sorted;
   },
 
   prepend => sub {
