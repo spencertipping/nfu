@@ -126,7 +126,11 @@ sub expand_filename_shorthands {
     # Use Hadoop commands to read stuff. The command itself needs to be
     # deferred because the hdfs path might not exist when the pseudofile is
     # resolved.
-    $result = "${original}hadoop fs -text " . shell_quote(hadoop_ls $f) . " |";
+    #
+    # Redirecting errors to /dev/null because hadoop fs -text complains loudly
+    # if you close its output stream, and this is really annoying.
+    $result = "${original}hadoop fs -text " . shell_quote(hadoop_ls $f)
+                                            . " 2>/dev/null |";
   } elsif ($f =~ s/^hdfsjoin://) {
     $result = "${original}$0 "
             . shell_quote(map "hdfs:$_",
