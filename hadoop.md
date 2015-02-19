@@ -53,7 +53,7 @@ downloading/uploading all of the intermediate results:
 
 ```sh
 # two hadoop jobs; intermediate results stay on HDFS and are never downloaded
-$ seq 100 | nfu -H@ [ -m 'row %0 % 10, %0 + 1' ] ^gc
+$ seq 100 | nfu -H@ [ -m 'row %0 % 10, %0 + 1' ] ^gc \
                 -H. ^C _
 ```
 
@@ -86,9 +86,7 @@ Here's an example of how you might use it:
 # won't partition your mapper outputs.
 $ nfu sh:'shuf /usr/share/dict/words' \
   --take 10000 \
-  --hadoop /tmp/nfu-jointest \
-           [ -vm 'row %0, length %0' ] \
-           ^v \
+  --hadoop /tmp/nfu-jointest [ -vm 'row %0, length %0' ] ^v
 
 # now inner-join against that data
 $ nfu /usr/share/dict/words \
