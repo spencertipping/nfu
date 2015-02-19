@@ -33,3 +33,8 @@ $ nfu psql:'select * from squares' -OT5
 7       49
 6       36
 ```
+
+## Schema inference
+If you specify `_` as the schema, nfu will scan the first 20 lines of input and
+come up with a set of columns whose names are `f0`, `f1`, ..., and whose types
+are one of `text`, `integer`, and `real`. `f0` will be a primary key.

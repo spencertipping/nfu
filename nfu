@@ -14,6 +14,8 @@ use constant VERBOSE_INTERVAL        => 30;
 use constant HADOOP_VERBOSE_INTERVAL => 250;
 use constant DELAY_BEFORE_VERBOSE    => 500;
 
+use constant SQL_INFER_PEEK_LINES    => 20;
+
 ++$|;
 
 # Setup child capture. All we need to do is wait for child pids; there's no
@@ -423,10 +425,10 @@ my %usages = (
   preview    => '',
   pipe       => 'shell command to pipe through',
   entropy    => 'running entropy of relative probabilities/frequencies',
-  psql       => 'query temporary postgres table: name, schema, query',
-  psqlinto   => 'create postgres table: name, schema',
-  sql        => 'query temporary sqlite3 table: name, schema, query',
-  sqlinto    => 'create sqlite3 table: name, schema',
+  psql       => 'query temporary postgres table: name, schema|_, query',
+  psqlinto   => 'create postgres table: name, schema|_',
+  sql        => 'query temporary sqlite3 table: name, schema|_, query',
+  sqlinto    => 'create sqlite3 table: name, schema|_',
 );
 
 my %env_docs = (
@@ -801,6 +803,34 @@ sub hadoop_into {
   system hadoop('fs', '-rm', '-r', @delete_afterwards) . ' 1>&2'
     if @delete_afterwards;
   "hdfs:$outfile";
+}
+
+sub sql_infer_column_type {
+  # Try to figure out the right type for a column based on some values for it.
+  # The possibilities are 'text', 'integer', or 'real'; this is roughly the set
+  # of stuff supported by both postgres and sqlite.
+  return 'integer' unless grep length && !/^-?[0-9]+$/, @_;
+  return 'real'    unless grep length &&
+                               !/^-?[0-9]+$
+                               | ^-?[0-9]+(?:\.[0-9]+)?(?:[eE][-+]?[0-9]+)?$
+                               | ^-?[0-9]*   \.[0-9]+  (?:[eE][-+]?[0-9]+)?$/x,
+                               @_;
+  return 'text';
+}
+
+sub sql_infer_schema {
+  # Takes a list of TSV lines and generates a table schema that will store
+  # them. The first column is always the primary key.
+  my $n       = max map scalar(split /\t/), @_;
+  my @columns = map [], 1 .. $n;
+  for (@_) {
+    my @vs = split /\t/;
+    push $columns[$_], $vs[$_] for 0 .. $#vs;
+  }
+
+  my @types = map sql_infer_column_type(@$_), @columns;
+  join ', ', map sprintf("f%d %s%s", $_, $types[$_], $_ ? '' : ' primary key'),
+                 0 .. $#columns;
 }
 
 my %functions = (
@@ -1337,11 +1367,19 @@ my %functions = (
 
   psqlinto => sub {
     my ($tname, $schema) = @_;
+    my @read;
+    if ($schema eq '_') {
+      # Infer the schema, which involves reading some data up front.
+      push @read, $_ while @read < SQL_INFER_PEEK_LINES && defined($_ = <>);
+      $schema = sql_infer_schema @read;
+    }
+
     system "psql -c 'CREATE TABLE $tname ($schema)' 1>&2"
       and die "psqlinto: failed to create table $tname";
     open my $fh, "| psql -c 'COPY $tname FROM STDIN' 1>&2"
       or die "psqlinto: failed to open psql for table $tname: $!";
 
+    be_verbose_as_appropriate(length), $fh->print($_) for @read;
     be_verbose_as_appropriate(length), $fh->print($_) while <>;
     close $fh;
 
@@ -1350,11 +1388,19 @@ my %functions = (
 
   psql => sub {
     my ($tname, $schema, $query) = @_;
+    my @read;
+    if ($schema eq '_') {
+      # Infer the schema, which involves reading some data up front.
+      push @read, $_ while @read < SQL_INFER_PEEK_LINES && defined($_ = <>);
+      $schema = sql_infer_schema @read;
+    }
+
     system "psql -c 'CREATE TABLE $tname ($schema)' 1>&2"
       and die "psql: failed to create table $tname";
     open my $fh, "| psql -c 'COPY $tname FROM STDIN' 1>&2"
       or die "psql: failed to open psql for table $tname: $!";
 
+    be_verbose_as_appropriate(length), $fh->print($_) for @read;
     be_verbose_as_appropriate(length), $fh->print($_) while <>;
     close $fh;
 
@@ -1373,6 +1419,13 @@ my %functions = (
     my $fifo_name = tmpnam;
     mkfifo $fifo_name, 0700 or die "failed to create fifo: $!";
 
+    my @read;
+    if ($schema eq '_') {
+      # Infer the schema, which involves reading some data up front.
+      push @read, $_ while @read < SQL_INFER_PEEK_LINES && defined($_ = <>);
+      $schema = sql_infer_schema @read;
+    }
+
     unless (fork) {
       system "echo "
            . shell_quote(".mode tabs\n"
@@ -1381,6 +1434,7 @@ my %functions = (
            . "| sqlite3 $db";
     } else {
       open my $fh, '>', $fifo_name or die "failed to open fifo into sqlite: $!";
+      be_verbose_as_appropriate(length), $fh->print($_) for @read;
       be_verbose_as_appropriate(length), $fh->print($_) while <>;
       close $fh;
       unlink $fifo_name;
@@ -1396,6 +1450,13 @@ my %functions = (
     my $fifo_name = tmpnam;
     mkfifo $fifo_name, 0700 or die "failed to create fifo: $!";
 
+    my @read;
+    if ($schema eq '_') {
+      # Infer the schema, which involves reading some data up front.
+      push @read, $_ while @read < SQL_INFER_PEEK_LINES && defined($_ = <>);
+      $schema = sql_infer_schema @read;
+    }
+
     unless (fork) {
       system "echo "
            . shell_quote(".mode tabs\n"
@@ -1406,6 +1467,7 @@ my %functions = (
            . "| sqlite3 $db";
     } else {
       open my $fh, '>', $fifo_name or die "failed to open fifo into sqlite: $!";
+      be_verbose_as_appropriate(length), $fh->print($_) for @read;
       be_verbose_as_appropriate(length), $fh->print($_) while <>;
       close $fh;
       unlink $fifo_name;
