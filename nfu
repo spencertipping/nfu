@@ -16,6 +16,8 @@ use constant DELAY_BEFORE_VERBOSE    => 500;
 
 use constant SQL_INFER_PEEK_LINES    => 20;
 
+our $diamond_has_data = 1;
+
 ++$|;
 
 # Setup child capture. All we need to do is wait for child pids; there's no
@@ -96,6 +98,7 @@ sub hadoop_ls;
 sub hadoop_matched_partfiles;
 sub shell_quote;
 sub expand_sql_shorthands;
+sub expand_sqlite_db;
 
 sub expand_filename_shorthands {
   # NB: we prepend a shell comment containing the original $f so anyone
@@ -161,7 +164,7 @@ sub expand_filename_shorthands {
   } elsif ($f =~ s/^sql://) {
     # sqlite3 query as TSV
     my ($db, $query) = split /:/, $f, 2;
-    $db     = shell_quote $db;
+    $db     = shell_quote expand_sqlite_db $db;
     $query  = expand_sql_shorthands $query;
     $result = "${original}echo " . shell_quote(".mode tabs\n$query;")
                                  . "| sqlite3 $db |";
@@ -480,6 +483,12 @@ sub expand_sql_shorthands {
   my ($sql) = @_;
   $sql =~ s/$_/$sql_aliases{$_}/eg for keys %sql_aliases;
   $sql;
+}
+
+sub expand_sqlite_db {
+  my $tempdir = tmpnam =~ s/\/[^\/]+$//r;
+  return "$tempdir/nfu-$ENV{USER}-\@sqlite.db" if $_[0] eq '@';
+  return $_[0];
 }
 
 sub expand_eval_shorthands {
@@ -858,7 +867,8 @@ sub sql_schema_and_buffer {
   my @read;
   if ($schema eq '_') {
     # Infer the schema, which involves reading some data up front.
-    push @read, $_ while @read < SQL_INFER_PEEK_LINES && defined($_ = <>);
+    push @read, $_ while @read < SQL_INFER_PEEK_LINES
+                         and $diamond_has_data &&= defined($_ = <>);
     $schema = sql_infer_schema @read;
   }
   $_[0] = $schema;
@@ -871,18 +881,19 @@ sub sqlite_parse_args {
 
   if (@pieces > 1) {
     my $table  = pop @pieces;
-    my $db     = shell_quote join ':', @pieces;
+    my $db     = shell_quote expand_sqlite_db(join ':', @pieces);
     ($db, $table, $schema, $query);
   } else {
     # Use a default table called 't' with an automatic index
-    ($pieces[0], '+t', $schema, $query);
+    (expand_sqlite_db($pieces[0]), '+t', $schema, $query);
   }
 }
 
 sub write_buffer_and_stdin {
   my ($fh, @buffer) = @_;
   be_verbose_as_appropriate(length), $fh->print($_) for @buffer;
-  be_verbose_as_appropriate(length), $fh->print($_) while <>;
+  be_verbose_as_appropriate(length), $fh->print($_)
+    while $diamond_has_data &&= defined($_ = <>);
 }
 
 sub sql_first_column_index {
@@ -890,7 +901,7 @@ sub sql_first_column_index {
   my ($table, $schema) = @_;
   my $column = $schema =~ s/\s.*$//r;
   my $index  = $table =~ s/^\+//
-    ? "CREATE INDEX $table$column ON $table($column);"
+    ? "CREATE INDEX $table$column ON $table($column);\n"
     : '';
   $_[0] = $table;
   $index;
@@ -1435,7 +1446,7 @@ my %functions = (
 
     open my $fh, "| psql -c "
                . shell_quote("CREATE TABLE $tname ($schema);\n"
-                           . "$index\n"
+                           . $index
                            . "COPY $tname FROM STDIN;")
                . " 1>&2"
       or die "psqlinto: failed to open psql for table $tname: $!";
@@ -1453,7 +1464,7 @@ my %functions = (
 
     open my $fh, "| psql -c "
                . shell_quote("CREATE TABLE $tname ($schema);\n"
-                           . "$index\n"
+                           . $index
                            . "COPY $tname FROM STDIN;\n"
                            . "COPY ($query) TO STDOUT WITH NULL AS '';\n"
                            . "DROP TABLE $tname;")
@@ -1476,7 +1487,7 @@ my %functions = (
       system "echo "
            . shell_quote(".mode tabs\n"
                        . "create table $table ($schema);\n"
-                       . "$index\n"
+                       . $index
                        . ".import $fifo_name $table")
            . "| sqlite3 $db";
     } else {
@@ -1501,7 +1512,7 @@ my %functions = (
       system "echo "
            . shell_quote(".mode tabs\n"
                        . "create table $table ($schema);\n"
-                       . "$index\n"
+                       . $index
                        . ".import $fifo_name $table\n"
                        . "$query;\n"
                        . "drop table $table;")
