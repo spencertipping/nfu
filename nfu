@@ -618,7 +618,7 @@ sub hadoop_matched_partfiles {
                   "hdfsjoin $path", "joins attempted", 1;
 
     printf STDERR "reporter:counter:%s,%s,%d\n",
-                  "hdfsjoin $path", "redundancy", $left_redundancy;
+                  "hdfsjoin $path", "left/right reads", $left_redundancy;
   }
 
   @files_to_read;
