@@ -95,6 +95,8 @@ sub random128 {join '', map sprintf('%04x', rand 65536), 0 .. 8}
 sub hadoop_ls;
 sub hadoop_matched_partfiles;
 sub shell_quote;
+sub expand_sql_shorthands;
+
 sub expand_filename_shorthands {
   # NB: we prepend a shell comment containing the original $f so anyone
   # downstream can get it back. This is currently used by Hadoop to reuse data
@@ -146,8 +148,9 @@ sub expand_filename_shorthands {
     $result = "${original}perl -e 'print \$_, \"\\n\" for ($f)' |";
   } elsif ($f =~ s/^psql://) {
     # Run a postgres query, exporting results as TSV
-    $f =~ s/'/'"'"'/g;
-    $result = "${original}psql -c 'COPY ($f) TO STDOUT WITH NULL AS '\\'\\' |";
+    $f = expand_sql_shorthands $f;
+    $f =~ shell_quote "COPY ($f) TO STDOUT WITH NULL AS ''";
+    $result = "${original}psql -c $f |";
   } elsif ($f =~ s/^psqls://) {
     # Look for postgres tables
     my $query = "SELECT tablename FROM pg_catalog.pg_tables "
@@ -158,7 +161,8 @@ sub expand_filename_shorthands {
   } elsif ($f =~ s/^sql://) {
     # sqlite3 query as TSV
     my ($db, $query) = split /:/, $f, 2;
-    $db = shell_quote $db;
+    $db     = shell_quote $db;
+    $query  = expand_sql_shorthands $query;
     $result = "${original}echo " . shell_quote(".mode tabs\n$query;")
                                  . "| sqlite3 $db |";
   } elsif ($f =~ /(\w*@?[^:]+):(.*)$/) {
@@ -460,6 +464,22 @@ sub expand_gnuplot_options {
     push @transformed_opts, $opt;
   }
   @transformed_opts;
+}
+
+my %sql_aliases = (
+  '%\*' => ' select * from ',
+  '%c'  => ' select count(1) from ',
+  '%d'  => ' select distinct * from ',
+  '%g'  => ' group by ',
+  '%j'  => ' inner join ',
+  '%l'  => ' outer left join ',
+  '%r'  => ' outer right join ',
+);
+
+sub expand_sql_shorthands {
+  my ($sql) = @_;
+  $sql =~ s/$_/$sql_aliases{$_}/eg for keys %sql_aliases;
+  $sql;
 }
 
 sub expand_eval_shorthands {
@@ -830,6 +850,45 @@ sub sql_infer_schema {
 
   my @types = map sql_infer_column_type(@$_), @columns;
   join ', ', map sprintf("f%d %s", $_, $types[$_]), 0 .. $#columns;
+}
+
+sub sql_schema_and_buffer {
+  # WARNING: this function modifies its argument
+  my ($schema) = @_;
+  my @read;
+  if ($schema eq '_') {
+    # Infer the schema, which involves reading some data up front.
+    push @read, $_ while @read < SQL_INFER_PEEK_LINES && defined($_ = <>);
+    $schema = sql_infer_schema @read;
+  }
+  $_[0] = $schema;
+  @read;
+}
+
+sub sqlite_parse_args {
+  my ($dbt, $schema, $query) = @_;
+  my @pieces = split /:/, $dbt;
+
+  if (@pieces > 1) {
+    my $table  = pop @pieces;
+    my $db     = shell_quote join ':', @pieces;
+    ($db, $table, $schema, $query);
+  } else {
+    # Use a default table called 't'
+    ($pieces[0], 't', $schema, $query);
+  }
+}
+
+sub write_buffer_and_stdin {
+  my ($fh, @buffer) = @_;
+  be_verbose_as_appropriate(length), $fh->print($_) for @buffer;
+  be_verbose_as_appropriate(length), $fh->print($_) while <>;
+}
+
+sub sql_first_column_index {
+  my ($table, $schema) = @_;
+  my $column = $schema =~ s/\s.*$//r;
+  "CREATE INDEX $table$column ON $table($column)";
 }
 
 my %functions = (
@@ -1366,75 +1425,58 @@ my %functions = (
 
   psqlinto => sub {
     my ($tname, $schema) = @_;
-    my @read;
-    if ($schema eq '_') {
-      # Infer the schema, which involves reading some data up front.
-      push @read, $_ while @read < SQL_INFER_PEEK_LINES && defined($_ = <>);
-      $schema = sql_infer_schema @read;
-    }
+    my @read  = sql_schema_and_buffer $schema;
+    my $index = sql_first_column_index $tname, $schema;
 
-    system "psql -c 'CREATE TABLE $tname ($schema)' 1>&2"
-      and die "psqlinto: failed to create table $tname";
-    open my $fh, "| psql -c 'COPY $tname FROM STDIN' 1>&2"
+    open my $fh, "| psql -c "
+               . shell_quote("CREATE TABLE $tname ($schema);\n"
+                           . "$index;\n"
+                           . "COPY $tname FROM STDIN;")
+               . " 1>&2"
       or die "psqlinto: failed to open psql for table $tname: $!";
 
-    be_verbose_as_appropriate(length), $fh->print($_) for @read;
-    be_verbose_as_appropriate(length), $fh->print($_) while <>;
+    write_buffer_and_stdin $fh, @read;
     close $fh;
-
     print $tname, "\n";
   },
 
   psql => sub {
     my ($tname, $schema, $query) = @_;
-    my @read;
-    if ($schema eq '_') {
-      # Infer the schema, which involves reading some data up front.
-      push @read, $_ while @read < SQL_INFER_PEEK_LINES && defined($_ = <>);
-      $schema = sql_infer_schema @read;
-    }
+    my @read  = sql_schema_and_buffer $schema;
+    my $index = sql_first_column_index $tname, $schema;
+    $query = expand_sql_shorthands $query;
 
-    system "psql -c 'CREATE TABLE $tname ($schema)' 1>&2"
-      and die "psql: failed to create table $tname";
-    open my $fh, "| psql -c 'COPY $tname FROM STDIN' 1>&2"
+    open my $fh, "| psql -c "
+               . shell_quote("CREATE TABLE $tname ($schema);\n"
+                           . "$index;\n"
+                           . "COPY $tname FROM STDIN;\n"
+                           . "COPY ($query) TO STDOUT WITH NULL AS '';\n"
+                           . "DROP TABLE $tname;")
+               . " 1>&2"
       or die "psql: failed to open psql for table $tname: $!";
 
-    be_verbose_as_appropriate(length), $fh->print($_) for @read;
-    be_verbose_as_appropriate(length), $fh->print($_) while <>;
+    write_buffer_and_stdin $fh, @read;
     close $fh;
-
-    $query = shell_quote "COPY ($query) TO STDOUT WITH NULL AS ''";
-    system "psql -c $query"
-      and die "psql: failed to execute query against table $tname";
-    system "psql -c 'DROP TABLE $tname' 1>&2"
-      and die "psql: failed to drop table $tname after running $query";
   },
 
   sqlinto => sub {
-    my ($dbt, $schema) = @_;
-    my @pieces    = split /:/, $dbt;
-    my $table     = pop @pieces;
-    my $db        = shell_quote join ':', @pieces;
+    my ($db, $table, $schema) = sqlite_parse_args @_;
     my $fifo_name = tmpnam;
     mkfifo $fifo_name, 0700 or die "failed to create fifo: $!";
 
-    my @read;
-    if ($schema eq '_') {
-      # Infer the schema, which involves reading some data up front.
-      push @read, $_ while @read < SQL_INFER_PEEK_LINES && defined($_ = <>);
-      $schema = sql_infer_schema @read;
-    }
+    my @read  = sql_schema_and_buffer $schema;
+    my $index = sql_first_column_index $table, $schema;
 
     unless (fork) {
       system "echo "
            . shell_quote(".mode tabs\n"
                        . "create table $table ($schema);\n"
+                       . "$index;\n"
                        . ".import $fifo_name $table")
            . "| sqlite3 $db";
     } else {
       open my $fh, '>', $fifo_name or die "failed to open fifo into sqlite: $!";
-      be_verbose_as_appropriate(length), $fh->print($_) for @read;
-      be_verbose_as_appropriate(length), $fh->print($_) while <>;
+      write_buffer_and_stdin $fh, @read;
       close $fh;
       unlink $fifo_name;
       print $table, "\n";
@@ -1442,32 +1484,26 @@ my %functions = (
   },
 
   sql => sub {
-    my ($dbt, $schema, $query) = @_;
-    my @pieces    = split /:/, $dbt;
-    my $table     = pop @pieces;
-    my $db        = shell_quote join ':', @pieces;
+    my ($db, $table, $schema, $query) = sqlite_parse_args @_;
     my $fifo_name = tmpnam;
     mkfifo $fifo_name, 0700 or die "failed to create fifo: $!";
 
-    my @read;
-    if ($schema eq '_') {
-      # Infer the schema, which involves reading some data up front.
-      push @read, $_ while @read < SQL_INFER_PEEK_LINES && defined($_ = <>);
-      $schema = sql_infer_schema @read;
-    }
+    my @read  = sql_schema_and_buffer $schema;
+    my $index = sql_first_column_index $table, $schema;
+    $query = expand_sql_shorthands $query;
 
     unless (fork) {
       system "echo "
            . shell_quote(".mode tabs\n"
                        . "create table $table ($schema);\n"
+                       . "$index;\n"
                        . ".import $fifo_name $table\n"
                        . "$query;\n"
                        . "drop table $table;")
            . "| sqlite3 $db";
     } else {
       open my $fh, '>', $fifo_name or die "failed to open fifo into sqlite: $!";
-      be_verbose_as_appropriate(length), $fh->print($_) for @read;
-      be_verbose_as_appropriate(length), $fh->print($_) while <>;
+      write_buffer_and_stdin $fh, @read;
       close $fh;
       unlink $fifo_name;
     }
@@ -1563,6 +1599,10 @@ if (@ARGV ? $ARGV[0] =~ /^-[h?]$/ || $ARGV[0] =~ /^--(usage|help)$/
   print STDERR "\ngnuplot expansions:\n\n";
   printf STDERR "  %2s -> '%s'\n", $_, $gnuplot_aliases{$_}
   for sort keys %gnuplot_aliases;
+
+  print STDERR "\nSQL expansions:\n\n";
+  printf STDERR "  %2s -> '%s'\n", $_, $sql_aliases{$_}
+  for sort keys %sql_aliases;
 
   my $env_len = 1 + max map length, keys %env_docs;
   print STDERR "\nenvironment variables:\n\n";
