@@ -146,9 +146,6 @@ sub expand_filename_shorthands {
             . shell_quote(map "hdfs:$_",
                           hadoop_matched_partfiles $f, $ENV{map_input_file})
             . " |";
-  } elsif ($f =~ s/^let://) {
-    my ($var, $val, $body) = split /:/, $f, 3;
-    $result = expand_filename_shorthands($body =~ s/%$var/$val/gr, 1);
   } elsif ($f =~ s/^perl://) {
     # Evaluate a Perl expression
     $f =~ s/'/'"'"'/g;
@@ -1593,17 +1590,11 @@ my %functions = (
 );
 
 my %bracket_handlers = (
-  ''   => sub {my $stuff = shell_quote @_; "".qx|$0 --quote $stuff|},
-  '::' => sub {my @body;
-               push @body, shift @_ until !@_ || $_[0] eq '::';
-               shift @_;
-               my %bindings = @_;
-               map s#%(\w+)#$bindings{$1} // "%$1"#gre, @body},
+  '' => sub {my $stuff = shell_quote @_; "".qx|$0 --quote $stuff|},
 );
 
 my %bracket_docs = (
-  ''   => 'nfu command:      [ -gc ]             == "$(nfu --quote -gc)"',
-  '::' => 'variable binding: ::[ -gc %x :: x y ] == -gc y',
+  '' => 'nfu command: [ -gc ] == "$(nfu --quote -gc)"',
 );
 
 # Print usage if the user clearly doesn't know what they're doing.
@@ -1731,6 +1722,13 @@ while (@ARGV) {
     # Lift the command (as a short option) into a quoted nfu instance.
     $x = shell_quote $x;
     unshift @ARGV, ''.qx|$0 --quote -$x|;
+  } elsif ($x eq '//') {
+    # Everything else is a variable binding of the form 'x=y'. Then go back
+    # through and rewrite all %x to be y.
+    my %bindings = map split(/=/, $_, 2), @ARGV;
+    my $names    = join '|', keys %bindings;
+    @ARGV = ();
+    s#%($names)#$bindings{$1} // "%$1"#ge for @args_to_parse;
   } else {
     push @args_to_parse, $x;
   }
