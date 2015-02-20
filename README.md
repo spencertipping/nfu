@@ -134,7 +134,6 @@ pseudofile patterns:
   hdfs:path      read HDFS file(s) with hadoop fs -text
   hdfsjoin:path  mapside join pseudofile (a subset of hdfs:path)
   http[s]://url  retrieve url with curl
-  let:x:v:body   pseudofile "body" where %x = v
   perl:expr      perl -e 'print "$_\n" for (expr)'
   sh:stuff       run sh -c "stuff", take stdout
   sql:db:query   results of query as TSV
