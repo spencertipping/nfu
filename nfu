@@ -146,8 +146,8 @@ sub geohash_decode {
           ungap_bits($gh >> 1) / 0x40000000 * 360 - 180);
 }
 
-sub ge {geohash_encode @_}
-sub gd {geohash_decode @_}
+sub ghe {geohash_encode @_}
+sub ghd {geohash_decode @_}
 
 # File functions
 sub random128 {join '', map sprintf('%04x', rand 65536), 0 .. 8}
