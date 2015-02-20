@@ -328,6 +328,7 @@ my %explosions = (
   # v => '--verbose'            # handled during option parsing
   V => '--variance',
   w => '--with',
+  z => '--intify',
 );
 
 # Minimum number of required arguments for each function. Numeric arguments are
@@ -371,6 +372,7 @@ my %arity = (
   take       => 0,
   variance   => 0,
   with       => 1,
+  intify     => 0,
 
   # Commands with no shorthands
   append     => 1,
@@ -426,6 +428,7 @@ my %usages = (
   take       => 'n to take first n, +n to take last n',
   variance   => 'running variance',
   with       => 'pseudofile to join column-wise onto input',
+  intify     => 'convert column to dense integers (linear space)',
 
   append     => 'pseudofile; appends its contents to current stream',
   prepend    => 'pseudofile; prepends its contents to current stream',
@@ -1064,6 +1067,13 @@ my %functions = (
       $$state[1] = $n;
       $$state[2] = $total;
       $v;
+    }),
+
+  stateful_unary_fn('intify',
+    sub {[{}, 0]},
+    sub {
+      my ($x, $state) = @_;
+      $state->[0]->{$x} //= $state->[1]++;
     }),
 
   aggregate => sub {

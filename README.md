@@ -71,6 +71,7 @@ where each command is one of the following:
   -H|--hadoop     (3) <hadoop streaming: outpath|.|@, mapper|:, reducer|:|_>
   -i|--index      (2) <field index, unsorted pseudofile to join against>
   -I|--indexouter (2) <field index, unsorted pseudofile to join against>
+  -z|--intify     (0) -- convert column to dense integers (linear space)
   -j|--join       (2) <field index, sorted pseudofile to join against>
   -J|--joinouter  (2) <field index, sorted pseudofile to join against>
   -k|--keep       (1) <row filter fn>
