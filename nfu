@@ -6,6 +6,8 @@ use v5.14;
 use strict;
 use warnings;
 
+use Fcntl;
+use Socket;
 use Time::HiRes qw/time/;
 use POSIX       qw/dup2 mkfifo setsid :sys_wait_h/;
 use File::Temp  qw/tmpnam/;
@@ -81,6 +83,13 @@ sub read_file {
   $result;
 }
 
+sub write_file {
+  open my $fh, '>', $_[0];
+  $fh->print($_[1]);
+  close $fh;
+  $_[0];
+}
+
 sub read_lines {
   open my $fh, expand_filename_shorthands $_[0], 1;
   my @result;
@@ -89,8 +98,19 @@ sub read_lines {
   @result;
 }
 
+sub write_lines {
+  my $filename = shift @_;
+  open my $fh, '>', $filename;
+  $fh->print($_, "\n") for @_;
+  close $fh;
+  $filename;
+}
+
 sub rf {read_file @_}
 sub rl {read_lines @_}
+
+sub wf {write_file @_}
+sub wl {write_lines @_}
 
 sub json_encode {$json->encode(@_)}
 sub json_decode {$json->decode(@_)}
@@ -148,6 +168,14 @@ sub geohash_decode {
 
 sub ghe {geohash_encode @_}
 sub ghd {geohash_decode @_}
+
+# HTTP
+sub httpok   { sprintf "HTTP 200 OK\nContent-Length: %d\n\n%s\n",
+                       length $_[0],
+                       $_[0] }
+
+sub chunk    { sprintf "%x\r\n%s\r\n", length($_[0]), $_[0] }
+sub endchunk { chunk '' }
 
 # File functions
 sub random128 {join '', map sprintf('%04x', rand 65536), 0 .. 8}
@@ -441,6 +469,8 @@ my %arity = (
   pipe       => 1,
   entropy    => 0,
   sql        => 3,
+  tcp        => 1,
+  http       => 1,
 );
 
 my %usages = (
@@ -496,6 +526,8 @@ my %usages = (
   pipe       => 'shell command to pipe through',
   entropy    => 'running entropy of relative probabilities/frequencies',
   sql        => 'create/query SQL table: db[:[+]table], schema|_, query|_',
+  tcp        => 'TCP server (emits fifo filenames)',
+  http       => 'HTTP adapter for TCP server output',
 );
 
 my %env_docs = (
@@ -981,6 +1013,90 @@ my %functions = (
       open my $fh, $f or die "failed to open pseudofile $_ ($f): $!";
       be_verbose_as_appropriate(length), print while <$fh>;
       close $fh;
+    }
+  },
+
+  tcp => sub {
+    my ($hostport)    = @_;
+    my ($host, $port) = $hostport =~ /:/ ? split /:/, $hostport
+                                         : ('0.0.0.0', $hostport);
+
+    socket my($serversock), PF_INET, SOCK_STREAM, getprotobyname 'tcp'
+      or die "socket failed: $!";
+    setsockopt $serversock, SOL_SOCKET, SO_REUSEADDR, pack 'l', 1
+      or die "setsockopt failed: $!";
+    bind $serversock, sockaddr_in $port, INADDR_ANY
+      or die "bind failed: $!";
+    listen $serversock, SOMAXCONN
+      or die "listen failed: $!";
+
+    while (1) {
+      # Fork twice per connection. This is egregious but necessary because the
+      # open() call blocks on a FIFO until the other end is connected, and we
+      # want the FIFO consumer to be at liberty to open them in either order
+      # without creating a deadlock.
+      my ($paddr, $client);
+      unless ($paddr = accept $client, $serversock) {
+        next if $!{EINTR};
+        die "accept failed: $!";
+      }
+
+      my ($port, $iaddr) = sockaddr_in $paddr;
+      my $iname = gethostbyaddr $iaddr, AF_INET;
+
+      my $r = tmpnam; mkfifo $r, 0700 or die "failed to create FIFO $r: $!";
+      my $w = tmpnam; mkfifo $w, 0700 or die "failed to create FIFO $w: $!";
+
+      print join("\t", $r, $w, $iname, $port), "\n";
+
+      # Socket reads: write to the "reader" fifo
+      unless (fork) {
+        my $buf;
+        sysopen my $fh, $r, O_WRONLY or die "failed to open $r for writing: $!";
+        syswrite $fh, $buf while sysread $client, $buf, 8192;
+        close $fh;
+        close $client;
+        unlink $r;
+        exit;
+      }
+
+      # Socket writes: read from the "writer" fifo
+      unless (fork) {
+        my $buf;
+        sysopen my $fh, $w, O_RDONLY or die "failed to open $w for writing: $!";
+        syswrite $client, $buf while sysread $fh, $buf, 8192;
+        close $fh;
+        close $client;
+        unlink $w;
+        exit;
+      }
+
+      close $client;
+    }
+  },
+
+  http => sub {
+    # Connect this to a --tcp thing to do HTTP stuff. In practice this just
+    # means parsing out the headers and handing off parsed data to the command.
+    my ($command) = @_;
+    open my $fh, "| $command" or die "http failed to launch $command: $!";
+    select((select($fh), $| = 1)[0]);
+
+    while (<>) {
+      chomp;
+      my ($in, $out, $port, $iaddr) = split /\t/;
+      open my $indata, '<', $in or die "http failed to read socket $in: $!";
+
+      my $url;
+      my %headers;
+      while (<$indata>) {
+        chomp;
+        last if length($_) <= 1;
+        $headers{$1} = $2 if  defined $url && /^([^:]+):\s*(.*)$/;
+        $url         = $1 if !defined $url && /^[A-Z]+\s+(\S+)/;
+      }
+      my $http_data = row($out, $url, je({%headers}), $port, $iaddr) . "\n";
+      $fh->print($http_data);
     }
   },
 
