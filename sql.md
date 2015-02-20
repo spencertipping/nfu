@@ -5,6 +5,9 @@ interfaces. There are two ways to do this:
 - `--sql` (`-Q`) command: populate a table and optionally issue a query
 - `sql:` pseudofile: use a database query as TSV data
 
+**WARNING:** `--sql` always first drops and recreates the table before
+importing data.
+
 You indicate postgres vs sqlite using a `P` or `S` prefix on the database name;
 otherwise the commands behave identically between databases. For example:
 
@@ -16,6 +19,10 @@ $ nfu /usr/share/dict/words \
 
 # length of all words starting with 'a'
 $ nfu sql:S@:"%*wordlengths %w f0 LIKE 'a%'"
+
+# nfu explains what's going on here:
+$ nfu --expand-sql "%*wordlengths %w f0 LIKE 'a%'"
+ select * from wordlengths  where f0 LIKE 'a%'
 ```
 
 ## How this works

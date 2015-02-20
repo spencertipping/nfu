@@ -1530,8 +1530,7 @@ my %functions = (
       # postgres
       $db = shell_quote expand_postgres_db $db;
       my $q = $query eq '_' ? ''
-                            : "COPY ($query) TO STDOUT WITH NULL AS '';\n"
-                            . "DROP TABLE $table;\n";
+                            : "COPY ($query) TO STDOUT WITH NULL AS '';\n";
 
       open my $fh, "| psql -c "
                  . shell_quote("DROP TABLE IF EXISTS $table;\n"
@@ -1558,9 +1557,7 @@ my %functions = (
                          . "CREATE TABLE $table ($schema);\n"
                          . ".import $fifo_name $table\n"
                          . $index
-                         . ($query eq '_' ? ''
-                                          : "$query;\n"
-                                          . "DROP TABLE $table;\n"))
+                         . ($query eq '_' ? '' : "$query;\n"))
              . "| sqlite3 " . shell_quote expand_sqlite_db $db;
       } else {
         open my $fh, '>', $fifo_name or die "failed to open fifo into sqlite: $!";
