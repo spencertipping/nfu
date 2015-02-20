@@ -40,9 +40,8 @@ with the following special cases:
   -- a table called `t` with a first-field index.
 - if `schema` is `_`, nfu looks at the first 20 lines of data and infers one,
   generating column names `f0`, `f1`, ..., `fN-1`.
-- if `query` is `_`, nfu drops data into the table and prints a pseudofile that
-  will read all of the table's data. Otherwise the query is executed, the data
-  is printed, and nfu will drop the table.
+- if `query` is `_`, nfu prints a `sql:` pseudofile that will read the whole
+  table. Otherwise the query is executed and the results printed as TSV.
 
 Queries are subject to SQL shorthand expansion; you can use `--expand-sql` to
 see the result. (All shorthands begin with `%`.)
