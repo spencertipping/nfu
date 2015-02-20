@@ -1381,7 +1381,7 @@ my %functions = (
     my $line_count = 0;
     my $fifo       = tmpnam;
     mkfifo $fifo, 0700 or die "failed to create fifo: $!";
-    open my $sorted, "sort -g $fifo |"
+    open my $sorted, sort_cmd('-g', $fifo) . " |"
       or die "failed to create sort process: $!";
     open my $fifo_fh, '>', $fifo or die "failed to write to fifo: $!";
 
