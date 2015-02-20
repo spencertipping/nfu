@@ -62,3 +62,29 @@ and I wanted the UUIDs to be integers so I could 3D-plot the coordinates.
 ```sh
 $ nfu data -gm 'row $::n{%0} //= $::i++, %1, %2' --splot
 ```
+
+## Removing outliers from plotted data
+The 3D plot above was scaled wrong due to a few outliers. Ideally I'd just be
+looking at stuff between the 5th and 95th percentiles.
+
+```sh
+$ nfu data --run '($::a, $::b) = (read_lines "sh:nfu data -f1N100")[5, 95];
+                  ($::c, $::d) = (read_lines "sh:nfu data -f2N100")[5, 95]' \
+           -k '%1 > $::a && %1 < $::b &&
+               %2 > $::c && %2 < $::d' \
+      > clipped
+```
+
+I preferred to leave it all as a single command so I could tweak stuff, so I
+used variable substitution to eliminate the duplication that would otherwise
+result:
+
+```sh
+$ nfu --run '($::a, $::b) = (rl "%data -f1N100")[%lo, %hi];
+             ($::c, $::d) = (rl "%data -f2N100")[%lo, %hi]' \
+      -k '%1 > $::a && %1 < $::b &&
+          %2 > $::c && %2 < $::d' \
+      %data \
+      -gm 'row $::n{%0} //= $::i++, %1, %2' --splot \
+      % data='sh:nfu data' lo=5 hi=95
+```

@@ -86,6 +86,9 @@ sub read_lines {
   @result;
 }
 
+sub rf {read_file @_}
+sub rl {read_lines @_}
+
 sub json_encode {$json->encode(@_)}
 sub json_decode {$json->decode(@_)}
 
