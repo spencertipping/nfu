@@ -189,18 +189,17 @@ sub unexpand_filename_shorthands {
 }
 
 my %pseudofile_docs = (
-  'file.gz'         => 'decompress file with gzip -dc',
-  'file.bz2'        => 'decompress file with bzip2 -dc',
-  'file.xz'         => 'decompress file with xz -dc',
-  'file.lzo'        => 'decompress file with lzop -dc',
-  'http[s]://url'   => 'retrieve url with curl',
-  'sh:stuff'        => 'run sh -c "stuff", take stdout',
-  'hdfs:path'       => 'read HDFS file(s) with hadoop fs -text',
-  'hdfsjoin:path'   => 'mapside join pseudofile (a subset of hdfs:path)',
-  'sql:db:query'    => 'results of query as TSV',
-  'perl:expr'       => 'perl -e \'print "$_\n" for (expr)\'',
-  'user@host:x'     => 'remote data access (x can be a pseudofile)',
-  'let:x:v:body'    => 'pseudofile "body" where %x = v',
+  'file.gz'       => 'decompress file with gzip -dc',
+  'file.bz2'      => 'decompress file with bzip2 -dc',
+  'file.xz'       => 'decompress file with xz -dc',
+  'file.lzo'      => 'decompress file with lzop -dc',
+  'http[s]://url' => 'retrieve url with curl',
+  'sh:stuff'      => 'run sh -c "stuff", take stdout',
+  'hdfs:path'     => 'read HDFS file(s) with hadoop fs -text',
+  'hdfsjoin:path' => 'mapside join pseudofile (a subset of hdfs:path)',
+  'sql:db:query'  => 'results of query as TSV',
+  'perl:expr'     => 'perl -e \'print "$_\n" for (expr)\'',
+  'user@host:x'   => 'remote data access (x can be a pseudofile)',
 );
 
 # Flags
@@ -1590,11 +1589,13 @@ my %functions = (
 );
 
 my %bracket_handlers = (
-  '' => sub {my $stuff = shell_quote @_; "".qx|$0 --quote $stuff|},
+  ''  => sub {my $stuff = shell_quote @_;    "".qx|$0 --quote $stuff|},
+  '@' => sub {my $stuff = shell_quote @_; "sh:".qx|$0 --quote $stuff|},
 );
 
 my %bracket_docs = (
-  '' => 'nfu command: [ -gc ] == "$(nfu --quote -gc)"',
+  ''  => 'nfu as function: [ -gc ]     == "$(nfu --quote -gc)"',
+  '@' => 'nfu as data:    @[ -gc foo ] == sh:"$(nfu --quote -gc foo)"',
 );
 
 # Print usage if the user clearly doesn't know what they're doing.
@@ -1710,19 +1711,19 @@ while (@ARGV) {
     die "unknown bracket prefix: $x" unless exists $bracket_handlers{$x};
     my @xs;
     my $depth = 1;
-    while (@ARGV && $depth) {
+    while (@ARGV) {
       my $next = shift @ARGV;
-      push @xs, $next;
       $depth-- if $next eq ']';
+      last unless $depth;
+      push @xs, $next;
       $depth++ if $next =~ /\[$/;
     }
-    pop @xs;    # pop closing bracket
     unshift @ARGV, $bracket_handlers{$x}->(@xs);
   } elsif ($x =~ s/^\^//) {
     # Lift the command (as a short option) into a quoted nfu instance.
     $x = shell_quote $x;
     unshift @ARGV, ''.qx|$0 --quote -$x|;
-  } elsif ($x eq '//') {
+  } elsif ($x eq '%') {
     # Everything else is a variable binding of the form 'x=y'. Then go back
     # through and rewrite all %x to be y.
     my %bindings = map split(/=/, $_, 2), @ARGV;

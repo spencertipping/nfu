@@ -5,10 +5,19 @@ inner join between a PostgreSQL table, a CSV from the Internet, and stuff on
 HDFS and gather the results into a sorted/uniqued text file:
 
 ```sh
-$ nfu psql:'select * from mytable' \
-      -i0 nfu[ http://data.com/csv -F , ] \
+$ nfu sql:P@:'%*mytable' \
+      -i0 @[ http://data.com/csv -F , ] \
       -H@::H. [ -i0 hdfsjoin:/path/to/hdfs/data ] ^gcf1. \
       -g \
+  > output
+
+# equivalent long version
+$ nfu sql:Pdbname:'select * from mytable' \
+      --index 0 @[ http://data.com/csv --fieldsplit , ] \
+      --hadoop /tmp/temp-resharded-upload-path [ ] [ ] \
+      --hadoop . [ --index 0 hdfsjoin:/path/to/hdfs/data ] \
+                 [ --group --count --fields 1. ] \
+      --group \
   > output
 ```
 
@@ -28,7 +37,7 @@ $ nfu output --map 'json_decode($_[2]).metadata.size' \
 - [The Humongous Survival Guide](humongous-survival-guide.md)
 - [The nfu Cookbook](cookbook.md)
 - [nfu and Hadoop Streaming](hadoop.md)
-- [nfu and PostgreSQL](postgres.md)
+- [nfu and SQL databases](sql.md)
 
 ## Contributors
 - [Spencer Tipping](https://github.com/spencertipping)
@@ -68,6 +77,7 @@ where each command is one of the following:
   -l|--log        (0) -- optional base (default e)
   -m|--map        (1) <row map fn>
      --mplot      (1) <gnuplot arguments per column, separated by ;>
+  -N|--ntiles     (1) <takes N, produces ntiles of numbers>
   -n|--number     (0) -- prepends line number to each line
   -o|--order      (0) -- sorts ascending by general numeric value
      --partition  (2) <partition id fn, shell command (using {})>
@@ -112,27 +122,23 @@ argument bracket preprocessing:
 
   ^stuff -> [ -stuff ]
 
-      [ ]         nfu command:     [ -gc ]     == "$(nfu --quote -gc)"
-  find[ ]           file list: find[ ... ]     == $(find ...) but safer
-   nfu[ ]      nfu pseudofile:  nfu[ foo ]     == "sh:$(nfu --quote foo)"
-    qq[ ]          quasiquote:   qq[ stuff ]   == "stuff"
-    sh[ ]    shell pseudofile:   sh[ cat foo ] == "sh:cat foo"
+   [ ]    nfu as function: [ -gc ]     == "$(nfu --quote -gc)"
+  @[ ]    nfu as data:    @[ -gc foo ] == sh:"$(nfu --quote -gc foo)"
 
 pseudofile patterns:
 
-  file.bz2         decompress file with bzip2 -dc
-  file.gz          decompress file with gzip -dc
-  file.lzo         decompress file with lzop -dc
-  file.xz          decompress file with xz -dc
-  hdfs:path        read HDFS file(s) with hadoop fs -text
-  hdfsjoin:path    mapside join pseudofile (a subset of hdfs:path)
-  http[s]://url    retrieve url with curl
-  perl:expr        perl -e 'print "$_\n" for (expr)'
-  psql:query       results of postgres query as TSV
-  psqls:[pattern]  list of postgres tables owned by you
-  sh:stuff         run sh -c "stuff", take stdout
-  sql:db:query     results of sqlite3 query as TSV
-  user@host:x      remote data access (x can be a pseudofile)
+  file.bz2       decompress file with bzip2 -dc
+  file.gz        decompress file with gzip -dc
+  file.lzo       decompress file with lzop -dc
+  file.xz        decompress file with xz -dc
+  hdfs:path      read HDFS file(s) with hadoop fs -text
+  hdfsjoin:path  mapside join pseudofile (a subset of hdfs:path)
+  http[s]://url  retrieve url with curl
+  let:x:v:body   pseudofile "body" where %x = v
+  perl:expr      perl -e 'print "$_\n" for (expr)'
+  sh:stuff       run sh -c "stuff", take stdout
+  sql:db:query   results of query as TSV
+  user@host:x    remote data access (x can be a pseudofile)
 
 gnuplot expansions:
 
@@ -151,6 +157,7 @@ SQL expansions:
   %j -> ' inner join '
   %l -> ' outer left join '
   %r -> ' outer right join '
+  %w -> ' where '
 
 database prefixes:
 
