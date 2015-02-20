@@ -963,7 +963,7 @@ my %functions = (
     }
 
     ++$count;
-    print "$count\t$last\n";
+    print "$count\t$last\n" if defined $last;
   },
 
   uncount => sub {
