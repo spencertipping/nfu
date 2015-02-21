@@ -376,6 +376,7 @@ sub quote_self {shell_quote $0, @_}
 my %explosions = (
   a => '--average',
   A => '--aggregate',
+  b => '--branch',
   c => '--count',
   C => '--uncount',
   D => '--drop',
@@ -406,6 +407,7 @@ my %explosions = (
   q => '--quant',
   Q => '--sql',
   r => '--read',
+  R => '--buffer',
   s => '--sum',
   S => '--delta',
   T => '--take',
@@ -420,6 +422,7 @@ my %explosions = (
 my %arity = (
   average    => 0,
   aggregate  => 1,
+  branch     => 1,
   count      => 0,
   uncount    => 0,
   delta      => 0,
@@ -448,10 +451,10 @@ my %arity = (
   plot       => 1,
   poll       => 2,
   read       => 0,
+  buffer     => 0,
   sum        => 0,
   quant      => 1,
   remove     => 1,
-  repeat     => 2,
   sample     => 1,
   take       => 0,
   variance   => 0,
@@ -473,11 +476,13 @@ my %arity = (
   sql        => 3,
   tcp        => 1,
   http       => 1,
+  repeat     => 2,
 );
 
 my %usages = (
   average    => 'window size (0 for full average) -- running average',
   aggregate  => 'aggregator fn',
+  branch     => 'branch (takes a pattern map)',
   count      => 'counts by first column value; like uniq -c',
   uncount    => 'the opposite of --count; repeats each row N times',
   delta      => 'value -> difference from last value',
@@ -508,8 +513,8 @@ my %usages = (
   sum        => 'value -> total += value',
   quant      => 'number to round to',
   read       => 'reads pseudofiles from the data stream',
+  buffer     => 'creates a pseudofile from the data stream',
   remove     => 'inverted row filter fn',
-  repeat     => 'repeat count, pseudofile to repeat',
   sample     => 'row selection probability in [0, 1]',
   take       => 'n to take first n, +n to take last n',
   variance   => 'running variance',
@@ -530,6 +535,7 @@ my %usages = (
   sql        => 'create/query SQL table: db[:[+]table], schema|_, query|_',
   tcp        => 'TCP server (emits fifo filenames)',
   http       => 'HTTP adapter for TCP server output',
+  repeat     => 'repeat count, pseudofile to repeat',
 );
 
 my %env_docs = (
@@ -1018,6 +1024,47 @@ my %functions = (
     }
   },
 
+  buffer => sub {
+    my $f = tmpnam;
+    open my $fh, '>', $f or die "failed to open buffer file $f: $!";
+    be_verbose_as_appropriate(length), $fh->print($_) while <>;
+    close $fh;
+    print $f, "\n";
+  },
+
+  branch => sub {
+    my (@cases) = split /\n/, $_[0];
+    my %branches;
+    my %branch_matchers;
+    my @order;
+
+    for (@cases) {
+      my ($k, $v) = map unpack('u', $_), split /\t/;
+      $v //= '';
+      open my $fh, "| $0 $v"
+        or die "failed to open branch subprocess '$0 $v': $!";
+      push @order, $k;
+      $branches{$k} = $fh;
+      $branch_matchers{$k} =
+        $k =~ s/^:// ? compile_eval_into_function $k, 'branch matcher function'
+      : $k eq '_'    ? sub { 1 }
+                     : sub { $_[0] eq $k };
+    }
+
+    while (<>) {
+      be_verbose_as_appropriate length;
+      chomp;
+      my @xs = split /\t/;
+      my @matching = grep $branch_matchers{$_}->(@xs), @order;
+
+      die "branch failed to match '$xs[0]' against any of ( @order )"
+      unless @matching;
+      $branches{$matching[0]}->print(row(@xs), "\n");
+    }
+
+    close for values %branches;
+  },
+
   tcp => sub {
     my ($hostport)    = @_;
     my ($host, $port) = $hostport =~ /:/ ? split /:/, $hostport
@@ -1097,6 +1144,7 @@ my %functions = (
         $headers{$1} = $2 if  defined $url && /^([^:]+):\s*(.*)$/;
         $url         = $1 if !defined $url && /^[A-Z]+\s+(\S+)/;
       }
+      close $indata;
       my $http_data = row($out, $url, je({%headers}), $port, $iaddr) . "\n";
       $fh->print($http_data);
     }
@@ -1911,6 +1959,35 @@ while (@ARGV) {
     # Lift the command (as a short option) into a quoted nfu instance.
     $x = shell_quote $x;
     unshift @ARGV, ''.qx|$0 --quote -$x|;
+  } elsif ($x =~ s/\{$//) {
+    # Parse a branching map, which has the form { 'pattern' stuff... ,
+    # 'pattern' stuff... , ... }. We generate a quoted TSV of packed base-64
+    # values.
+    die "unknown brace prefix: $x" if length $x;
+    my @lines;
+    my $key;
+    my @value;
+    my $depth = 1;
+    while (@ARGV) {
+      my $next = shift @ARGV;
+      $depth-- if $next eq '}';
+
+      if (!$depth || defined $key && $next eq ',') {
+        push @lines, row pack('u', $key),
+                         pack('u', shell_quote @value);
+        @value = ();
+        $key   = undef;
+      } elsif (defined $key) {
+        push @value, $next;
+      } else {
+        $key = $next;
+      }
+
+      last unless $depth;
+      $depth++ if $next =~ /\{$/;
+    }
+
+    unshift @ARGV, join "\n", @lines;
   } elsif ($x eq '%') {
     # Everything else is a variable binding of the form 'x=y'. Then go back
     # through and rewrite all %x to be y.
