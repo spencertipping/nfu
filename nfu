@@ -170,7 +170,7 @@ sub ghe {geohash_encode @_}
 sub ghd {geohash_decode @_}
 
 # HTTP
-sub httpok   { sprintf "HTTP 200 OK\nContent-Length: %d\n\n%s\n",
+sub httpok   { sprintf "HTTP/1.0 200 OK\nContent-Length: %d\n\n%s\n",
                        length $_[0],
                        $_[0] }
 
