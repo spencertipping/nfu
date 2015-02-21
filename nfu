@@ -1695,9 +1695,12 @@ my %functions = (
     my ($outfile, $mapper, $reducer) = @_;
     if ($outfile eq '.') {
       # Print output data to stdout, then delete outfile
-      my $filename = hadoop_tempfile;
-      system hadoop('fs', '-text',
-        map s/^hdfs://r, hadoop_ls hadoop_into $filename, $mapper, $reducer);
+      my $filename  = hadoop_tempfile;
+      my @partfiles = map s/^hdfs://r,
+                          hadoop_ls hadoop_into $filename, $mapper, $reducer;
+      open my $fh, "| xargs hadoop -text" or die "failed to execute xargs: $!";
+      $fh->print("$_\n") for @partfiles;
+      close $fh;
       system hadoop('fs', '-rm', '-r', $filename) . ' 1>&2';
     } else {
       $outfile = hadoop_tempfile if $outfile eq '@';
