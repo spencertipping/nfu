@@ -1771,11 +1771,13 @@ my %functions = (
 my %bracket_handlers = (
   ''  => sub {my $stuff = shell_quote @_;    "".qx|$0 --quote $stuff|},
   '@' => sub {my $stuff = shell_quote @_; "sh:".qx|$0 --quote $stuff|},
+  q   => sub {shell_quote @_},
 );
 
 my %bracket_docs = (
   ''  => 'nfu as function: [ -gc ]     == "$(nfu --quote -gc)"',
   '@' => 'nfu as data:    @[ -gc foo ] == sh:"$(nfu --quote -gc foo)"',
+  q   => 'quote things:   q[ foo bar ] == "foo bar"',
 );
 
 # Print usage if the user clearly doesn't know what they're doing.
