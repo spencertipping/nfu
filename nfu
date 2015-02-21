@@ -118,6 +118,8 @@ sub json_decode {$json->decode(@_)}
 sub je {json_encode @_}
 sub jd {json_decode @_}
 
+sub F {(split /\t/, $_[0])[$_[1]]}
+
 our @gh_alphabet = split //, '0123456789bcdefghjkmnpqrstuvwxyz';
 our %gh_decode   = map(($gh_alphabet[$_], $_), 0..$#gh_alphabet);
 
