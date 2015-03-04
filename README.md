@@ -1,4 +1,7 @@
 # nfu: Numeric Fu for your shell
+**NOTE:** nfu is unlikely to receive any more major updates, as I'm currently
+working on its successor [ni](https://github.com/spencertipping/ni).
+
 `nfu` is a text data hub and transformation tool with a large set of composable
 functions and source/sink adapters. For example, if you wanted to do a map-side
 inner join between a PostgreSQL table, a CSV from the Internet, and stuff on
