@@ -841,7 +841,7 @@ sub hadoop_into {
     if (s/^hdfs://) {
       push @input_files, '-input', $_;
     } else {
-      push @other_argv, $_;
+      push @other_argv, expand_filename_shorthands $_;
     }
   }
 
@@ -1501,8 +1501,7 @@ my %functions = (
     while (<>) {
       be_verbose_as_appropriate length;
       chomp;
-      my @xs = split /\t/;
-      print "$_\n" for $f->(@xs);
+      print "$_\n" for $f->(split /\t/);
     }
   },
 
