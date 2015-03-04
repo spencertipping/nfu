@@ -58,6 +58,13 @@ sub frequencies {
 
 sub mean {scalar @_ && sum(@_) / @_}
 
+sub entropy {
+  my $s = sum @_;
+  my $t = 0;
+  $t -= ($_ / $t) * log($_ / $t) for @_;
+  $t / log(2);
+}
+
 # JSON support (if available)
 our $json;
 if (eval {require JSON}) {

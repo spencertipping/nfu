@@ -52,13 +52,14 @@ MIT license as usual.
 If you invoke `nfu` with no arguments, it will give you the following summary:
 
 ```sh
-$ nfu
 usage: nfu [prefix-commands...] [input-files...] commands...
 where each command is one of the following:
 
   -A|--aggregate  (1) <aggregator fn>
      --append     (1) <pseudofile; appends its contents to current stream>
   -a|--average    (0) -- window size (0 for full average) -- running average
+  -b|--branch     (1) <branch (takes a pattern map)>
+  -R|--buffer     (0) -- creates a pseudofile from the data stream
   -c|--count      (0) -- counts by first column value; like uniq -c
   -S|--delta      (0) -- value -> difference from last value
   -D|--drop       (0) -- number of records to drop
@@ -72,6 +73,7 @@ where each command is one of the following:
      --fold       (1) <function that returns true when line should be folded>
   -g|--group      (0) -- sorts ascending, takes optional column list
   -H|--hadoop     (3) <hadoop streaming: outpath|.|@, mapper|:, reducer|:|_>
+     --http       (1) <HTTP adapter for TCP server output>
   -i|--index      (2) <field index, unsorted pseudofile to join against>
   -I|--indexouter (2) <field index, unsorted pseudofile to join against>
   -z|--intify     (0) -- convert column to dense integers (linear space)
@@ -103,6 +105,7 @@ where each command is one of the following:
   -Q|--sql        (3) <create/query SQL table: db[:[+]table], schema|_, query|_>
   -s|--sum        (0) -- value -> total += value
   -T|--take       (0) -- n to take first n, +n to take last n
+     --tcp        (1) <TCP server (emits fifo filenames)>
      --tee        (1) <shell command; duplicates data to stdin of command>
   -C|--uncount    (0) -- the opposite of --count; repeats each row N times
   -V|--variance   (0) -- running variance
@@ -128,6 +131,7 @@ argument bracket preprocessing:
 
    [ ]    nfu as function: [ -gc ]     == "$(nfu --quote -gc)"
   @[ ]    nfu as data:    @[ -gc foo ] == sh:"$(nfu --quote -gc foo)"
+  q[ ]    quote things:   q[ foo bar ] == "foo bar"
 
 pseudofile patterns:
 
