@@ -125,6 +125,14 @@ sub json_decode {$json->decode(@_)}
 sub je {json_encode @_}
 sub jd {json_decode @_}
 
+sub hadoop_counter {
+  printf STDERR "reporter:counter:%s,%s,%d\n", $_[0] =~ y/,/_/r,
+                                               $_[1] =~ y/,/_/r,
+                                               $_[2] // 1;
+}
+
+sub hc {hadoop_counter @_}
+
 sub F {my $l = shift @_; (split /\t/, $l)[@_]}
 
 our @gh_alphabet = split //, '0123456789bcdefghjkmnpqrstuvwxyz';
@@ -352,8 +360,7 @@ sub be_verbose_as_appropriate {
     # better because Hadoop counters are integers, so they'll suffer from
     # truncation for fractional quantities.
     $verbose_command_formatted =~ s/[,\n]/_/g;
-    printf STDERR "reporter:counter:%s,%s,%d\n",
-                  $verbose_command_formatted, @$_
+    hc $verbose_command_formatted, @$_
     for (['lines',      $n_lines],
          ['runtime ms', $runtime * 1000],
          ['bytes',      $n_bytes]);
@@ -753,13 +760,13 @@ sub hadoop_matched_partfiles {
   # We won't be able to do anything until both sides of the join exist.
   until (@left_files = hadoop_partsort hadoop_ls $partfile_dirname) {
     print STDERR "hadoop_matched_partfiles: waiting for input...\n";
-    print STDERR "reporter:counter:hadoop_matched_partfiles,left wait,1\n";
+    hc qw/hadoop_matched_partfiles left_wait/;
     sleep 1;
   }
 
   until (@possibilities = hadoop_partsort hadoop_ls $path) {
     print STDERR "hadoop_matched_partfiles: waiting for join data...\n";
-    print STDERR "reporter:counter:hadoop_matched_partfiles,right wait,1\n";
+    hc qw/hadoop_matched_partfiles right wait/;
     sleep 1;
   }
 
@@ -788,14 +795,9 @@ sub hadoop_matched_partfiles {
     printf STDERR "hdfsjoin:$path [$partfile] (inferred partfile $n): %s\n",
                   join(' ', @files_to_read);
 
-    printf STDERR "reporter:counter:%s,%s,%d\n",
-                  "hdfsjoin $path", "joins attempted", 1;
-
-    printf STDERR "reporter:counter:%s,%s,%d\n",
-                  "hdfsjoin $path", "left/right reads", $left_redundancy;
-
-    printf STDERR "reporter:counter:%s,%s,%d\n",
-                  "hdfsjoin $path", "overreads", $left_redundancy - 1;
+    hc "hdfsjoin $path", "joins attempted",  1;
+    hc "hdfsjoin $path", "left/right reads", $left_redundancy;
+    hc "hdfsjoin $path", "overreads",        $left_redundancy - 1;
   }
 
   @files_to_read;
