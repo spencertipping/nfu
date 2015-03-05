@@ -1556,7 +1556,7 @@ my %functions = (
       be_verbose_as_appropriate length;
       chomp;
       my @xs = split /\t/;
-      print $_ unless $f->(@xs);
+      print $line unless $f->(@xs);
     }
   },
 
