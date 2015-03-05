@@ -59,9 +59,9 @@ sub frequencies {
 sub mean {scalar @_ && sum(@_) / @_}
 
 sub entropy {
-  my $s = sum @_;
+  my $s = sum(@_) || 1;
   my $t = 0;
-  $t -= ($_ / $t) * log($_ / $t) for @_;
+  $t -= ($_ / $s) * log($_ / $s) for @_;
   $t / log(2);
 }
 
