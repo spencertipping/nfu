@@ -740,8 +740,8 @@ sub hadoop_ls {
 sub gcd {
   my ($a, $b) = @_;
   while ($b) {
-    if ($a > $b) { ($a, $b) = ($b, $a) }
-    else         { $b = $a % $b }
+    if ($b > $a) { ($a, $b) = ($b, $a) }
+    else         { $a %= $b }
   }
   $a;
 }
