@@ -143,6 +143,7 @@ pseudofile patterns:
   hdfsjoin:path  mapside join pseudofile (a subset of hdfs:path)
   http[s]://url  retrieve url with curl
   perl:expr      perl -e 'print "$_\n" for (expr)'
+  s3://url       access S3 using s3cmd
   sh:stuff       run sh -c "stuff", take stdout
   sql:db:query   results of query as TSV
   user@host:x    remote data access (x can be a pseudofile)

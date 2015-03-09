@@ -300,6 +300,7 @@ my %pseudofile_docs = (
   'file.lzo'      => 'decompress file with lzop -dc',
   'http[s]://url' => 'retrieve url with curl',
   'sh:stuff'      => 'run sh -c "stuff", take stdout',
+  's3://url'      => 'access S3 using s3cmd',
   'hdfs:path'     => 'read HDFS file(s) with hadoop fs -text',
   'hdfsjoin:path' => 'mapside join pseudofile (a subset of hdfs:path)',
   'sql:db:query'  => 'results of query as TSV',
