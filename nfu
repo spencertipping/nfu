@@ -228,6 +228,9 @@ sub expand_filename_shorthands {
   } elsif ($f =~ s/^sh://) {
     # Execute a command and capture stdout
     $result = "$original$f |";
+  } elsif ($f =~ /^s3:/) {
+    # Use s3cmd and cat to stdout
+    $result = "s3cmd get '$f' - |";
   } elsif ($f =~ s/^hdfs-ls://) {
     # Just list a directory. This is used by hdfs: below to provide
     # indirection.
