@@ -65,6 +65,13 @@ sub entropy {
   $t / log(2);
 }
 
+sub dot {
+  my ($u, $v) = @_;
+  my $s = 0;
+  $s += $$u[$_] * $$v[$_] for 0 .. min($#{$u}, $#{$v});
+  $s;
+}
+
 # JSON support (if available)
 our $json;
 if (eval {require JSON}) {
