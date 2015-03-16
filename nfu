@@ -72,6 +72,13 @@ sub dot {
   $s;
 }
 
+sub dist {
+  # Euclidean distance (you specify the deltas)
+  my $s = 0;
+  $s += $_*$_ for @_;
+  sqrt($s);
+}
+
 # JSON support (if available)
 our $json;
 if (eval {require JSON}) {
