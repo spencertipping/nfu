@@ -11,6 +11,7 @@ use Socket;
 use Time::HiRes qw/time/;
 use POSIX       qw/dup2 mkfifo setsid :sys_wait_h/;
 use File::Temp  qw/tmpnam/;
+use Math::Trig;
 
 use constant VERBOSE_INTERVAL        => 30;
 use constant HADOOP_VERBOSE_INTERVAL => 250;
@@ -78,6 +79,10 @@ sub dist {
   $s += $_*$_ for @_;
   sqrt($s);
 }
+
+sub rect_polar { (dist(@_), atan2($_[0], $_[1]) / pi * 180) }
+sub polar_rect { ($_[0] * sin($_[1] / 180 * pi),
+                  $_[0] * cos($_[1] / 180 * pi)) }
 
 # JSON support (if available)
 our $json;
