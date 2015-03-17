@@ -19,6 +19,8 @@ use constant DELAY_BEFORE_VERBOSE    => 500;
 
 use constant SQL_INFER_PEEK_LINES    => 20;
 
+use constant LOG_2 => log(2);
+
 # 64-bit hex constants in geohash encoder won't work on 32-bit architectures
 no warnings 'portable';
 
@@ -58,12 +60,13 @@ sub frequencies {
 }
 
 sub mean {scalar @_ && sum(@_) / @_}
+sub log2 {log($_[0]) / LOG_2}
 
 sub entropy {
   my $s = sum(@_) || 1;
   my $t = 0;
   $t -= ($_ / $s) * log($_ / $s) for @_;
-  $t / log(2);
+  $t / LOG_2;
 }
 
 sub dot {
@@ -1491,8 +1494,8 @@ my %functions = (
          my $f           = $$state[0] += $x;
          my $p           = $x  / $f;
          my $p0          = $f0 / $f;
-         $$state[1]      = $p0 * (($p0 > 0 ? -log($p0) / log(2) : 0) + $h0)
-                         + $p  *  ($p  > 0 ? -log($p)  / log(2) : 0)}),
+         $$state[1]      = $p0 * (($p0 > 0 ? -log($p0) / LOG_2 : 0) + $h0)
+                         + $p  *  ($p  > 0 ? -log($p)  / LOG_2 : 0)}),
 
   take => sub {
     if ($_[0] =~ s/^\+//) {
