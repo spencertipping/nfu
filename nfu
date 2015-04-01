@@ -209,6 +209,11 @@ sub ghe {geohash_encode @_}
 sub ghd {geohash_decode @_}
 
 # HTTP
+sub http_send { sprintf "HTTP/1.0 %s\nContent-Length: %d\n\n%s\n",
+                        $_[0],
+                        length $_[1],
+                        $_[1] }
+
 sub httpok   { sprintf "HTTP/1.0 200 OK\nContent-Length: %d\n\n%s\n",
                        length $_[0],
                        $_[0] }
