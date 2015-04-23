@@ -1529,9 +1529,11 @@ my %functions = (
 
   drop => sub {
     my $n = $_[0] // 1;
-    while (<>) {
-      be_verbose_as_appropriate length;
-      last if --$n <= 0;
+    if ($n) {
+      while (<>) {
+        be_verbose_as_appropriate length;
+        last if --$n <= 0;
+      }
     }
     be_verbose_as_appropriate(length), print while <>;
   },
