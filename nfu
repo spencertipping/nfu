@@ -1000,7 +1000,7 @@ sub sql_infer_schema {
   my @columns = map [], 1 .. $n;
   for (@_) {
     my @vs = split /\t/;
-    push $columns[$_], $vs[$_] for 0 .. $#vs;
+    push @{$columns[$_]}, $vs[$_] for 0 .. $#vs;
   }
 
   my @types = map sql_infer_column_type(@$_), @columns;
