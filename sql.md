@@ -6,7 +6,8 @@ interfaces. There are two ways to do this:
 - `sql:` pseudofile: use a database query as TSV data
 
 **WARNING:** `--sql` always first drops and recreates the table before
-importing data.
+importing data. The `sql:` pseudofile does not delete or modify anything
+(unless you specifically write that into a query).
 
 You indicate postgres vs sqlite using a `P` or `S` prefix on the database name;
 otherwise the commands behave identically between databases. For example:
