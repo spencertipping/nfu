@@ -290,8 +290,8 @@ sub expand_filename_shorthands {
     if ($db =~ s/^P//) {
       # postgres
       $db     = shell_quote expand_postgres_db $db;
-      $query  = shell_quote "COPY ($f) TO STDOUT WITH NULL AS ''";
-      $result = "${original}psql -c $f $db |";
+      $query  = shell_quote "COPY ($query) TO STDOUT WITH NULL AS ''";
+      $result = "${original}psql -c $query $db |";
     } elsif ($db =~ s/^S//) {
       # sqlite3
       $db     = shell_quote expand_sqlite_db $db;
@@ -638,8 +638,28 @@ sub expand_sqlite_db {
 }
 
 sub expand_postgres_db {
-  return $ENV{USER} if $_[0] eq '@';
-  return $_[0];
+  # Create a postgresql:// URI. Note that at this point no support exists for
+  # putting colons into the database descriptor, so port overriding isn't yet
+  # possible.
+  my ($host, $port, $user, $db) = ('localhost', 5433, $ENV{USER}, $ENV{USER});
+  if ($_[0] =~ m#^(?:(\w+)@)?([^@/:]+)(?::(\d+))?/(\w+)$#) {
+    $user = $1 // $ENV{USER};
+    $host = $2 // 'localhost';
+    $port = $3 // 5433;
+    $db   = $4;
+    return "postgresql://$host:$port/$db?user=$user";
+  } elsif ($_[0] =~ m#^(\w+)@(\w+)$#) {
+    # Simple DB connection; assume localhost
+    return "postgresql:$2?user=$1";
+  } elsif ($_[0] =~ m#^[^\@:/]+$#) {
+    # Really simple connection; no URL at all
+    return $_[0];
+  } elsif ($_[0] eq '@') {
+    # Really simple connection; use username as DB
+    return $ENV{USER};
+  } else {
+    die "not sure how to parse postgres DB '$_[0]'";
+  }
 }
 
 sub expand_eval_shorthands {
