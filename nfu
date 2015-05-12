@@ -640,15 +640,12 @@ sub expand_sqlite_db {
 sub expand_postgres_db {
   # Expands a DB descriptor into a series of properly-shellquoted options to
   # pass to the 'psql' command.
-  my ($host, $port, $user, $db) = ('localhost', 5433, $ENV{USER}, $ENV{USER});
-  if ($_[0] =~ m#^(?:([^\@/:]+)@)?([^\@/:]+)(?::(\d+))?/([^/]+)$#) {
+  my ($host, $user, $db) = ('localhost', $ENV{USER}, $ENV{USER});
+  if ($_[0] =~ m#^(?:([^\@/:]+)@)?([^\@/:]+)/([^/]+)$#) {
     # NB: don't try to change this to use $1, $2, etc as arguments to
     # shell_quote. Perl references arguments, so this will fail horribly.
-    ($user, $host, $port, $db) = ($1 // $ENV{USER},
-                                  $2 // 'localhost',
-                                  $3 // 5433,
-                                  $4);
-    shell_quote '-U', $user, '-h', $host, '-p', $port, '-d', $db;
+    ($user, $host, $db) = ($1 // $ENV{USER}, $2 // 'localhost', $3);
+    shell_quote '-U', $user, '-h', $host, '-d', $db;
   } elsif ($_[0] =~ m#^(\w+)@(\w+)$#) {
     # Simple DB connection; assume localhost
     ($user, $db) = ($1, $2);
