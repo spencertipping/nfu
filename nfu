@@ -641,25 +641,24 @@ sub expand_postgres_db {
   # Expands a DB descriptor into a series of properly-shellquoted options to
   # pass to the 'psql' command.
   my ($host, $port, $user, $db) = ('localhost', 5433, $ENV{USER}, $ENV{USER});
-  if ($_[0] =~ m#^(?:(\w+)@)?([^@/:]+)(?::(\d+))?/(\w+)$#) {
-    $user = shell_quote($1 // $ENV{USER});
-    $host = shell_quote($2 // 'localhost');
-    $port = shell_quote($3 // 5433);
-    $db   = shell_quote $4;
-    return "-U $user -h $host -p $port -d $db";
+  if ($_[0] =~ m#^(?:([^\@/:]+)@)?([^\@/:]+)(?::(\d+))?/([^/]+)$#) {
+    # NB: don't try to change this to use $1, $2, etc as arguments to
+    # shell_quote. Perl references arguments, so this will fail horribly.
+    ($user, $host, $port, $db) = ($1 // $ENV{USER},
+                                  $2 // 'localhost',
+                                  $3 // 5433,
+                                  $4);
+    shell_quote '-U', $user, '-h', $host, '-p', $port, '-d', $db;
   } elsif ($_[0] =~ m#^(\w+)@(\w+)$#) {
     # Simple DB connection; assume localhost
-    $user = shell_quote $1;
-    $db   = shell_quote $2;
-    return "-U $user -d $db";
+    ($user, $db) = ($1, $2);
+    shell_quote '-U', $user, '-d', $db;
   } elsif ($_[0] =~ m#^[^\@:/]+$#) {
     # Really simple connection
-    $db = shell_quote $_[0];
-    return "-d $db";
+    shell_quote '-d', $_[0];
   } elsif ($_[0] eq '@') {
     # Really simple connection; use username as DB
-    $db = shell_quote $ENV{USER};
-    return "-d $db";
+    shell_quote '-d', $ENV{USER};
   } else {
     die "not sure how to parse postgres DB '$_[0]'";
   }
