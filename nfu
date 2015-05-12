@@ -289,7 +289,7 @@ sub expand_filename_shorthands {
 
     if ($db =~ s/^P//) {
       # postgres
-      $db     = shell_quote expand_postgres_db $db;
+      $db     = expand_postgres_db $db;
       $query  = shell_quote "COPY ($query) TO STDOUT WITH NULL AS ''";
       $result = "${original}psql -c $query $db |";
     } elsif ($db =~ s/^S//) {
@@ -638,25 +638,28 @@ sub expand_sqlite_db {
 }
 
 sub expand_postgres_db {
-  # Create a postgresql:// URI. Note that at this point no support exists for
-  # putting colons into the database descriptor, so port overriding isn't yet
-  # possible.
+  # Expands a DB descriptor into a series of properly-shellquoted options to
+  # pass to the 'psql' command.
   my ($host, $port, $user, $db) = ('localhost', 5433, $ENV{USER}, $ENV{USER});
   if ($_[0] =~ m#^(?:(\w+)@)?([^@/:]+)(?::(\d+))?/(\w+)$#) {
-    $user = $1 // $ENV{USER};
-    $host = $2 // 'localhost';
-    $port = $3 // 5433;
-    $db   = $4;
-    return "postgresql://$host:$port/$db?user=$user";
+    $user = shell_quote($1 // $ENV{USER});
+    $host = shell_quote($2 // 'localhost');
+    $port = shell_quote($3 // 5433);
+    $db   = shell_quote $4;
+    return "-U $user -h $host -p $port -d $db";
   } elsif ($_[0] =~ m#^(\w+)@(\w+)$#) {
     # Simple DB connection; assume localhost
-    return "postgresql:$2?user=$1";
+    $user = shell_quote $1;
+    $db   = shell_quote $2;
+    return "-U $user -d $db";
   } elsif ($_[0] =~ m#^[^\@:/]+$#) {
-    # Really simple connection; no URL at all
-    return $_[0];
+    # Really simple connection
+    $db = shell_quote $_[0];
+    return "-d $db";
   } elsif ($_[0] eq '@') {
     # Really simple connection; use username as DB
-    return $ENV{USER};
+    $db = shell_quote $ENV{USER};
+    return "-d $db";
   } else {
     die "not sure how to parse postgres DB '$_[0]'";
   }
@@ -1826,7 +1829,7 @@ my %functions = (
 
     if ($db =~ s/^P//) {
       # postgres
-      $db = shell_quote expand_postgres_db $db;
+      my $edb = expand_postgres_db $db;
       my $q = $query eq '_' ? ''
                             : "COPY ($query) TO STDOUT WITH NULL AS '';\n";
 
@@ -1836,7 +1839,7 @@ my %functions = (
                              . "COPY $table FROM STDIN;\n"
                              . $index
                              . $q)
-                 . " $db 1>&2"
+                 . " $edb 1>&2"
         or die "psql: failed to open psql for table $table $!";
 
       write_buffer_and_stdin $fh, @read;
