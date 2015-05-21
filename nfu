@@ -522,6 +522,7 @@ my %arity = (
   tcp        => 1,
   http       => 1,
   repeat     => 2,
+  octave     => 1,
 );
 
 my %usages = (
@@ -581,6 +582,7 @@ my %usages = (
   tcp        => 'TCP server (emits fifo filenames)',
   http       => 'HTTP adapter for TCP server output',
   repeat     => 'repeat count, pseudofile to repeat',
+  octave     => 'pipe through octave; vector is called xs',
 );
 
 my %env_docs = (
@@ -1331,6 +1333,25 @@ my %functions = (
       be_verbose_as_appropriate(length), print while <$fh>;
       close $fh;
     }
+  },
+
+  octave => sub {
+    my ($commands) = @_;
+    my $temp       = tmpnam;
+    open my $fh, '>', $temp or die $!;
+    be_verbose_as_appropriate(length), print $fh $_ while <>;
+    close $fh;
+
+    system 'octave',
+           '-q',
+           '--eval', "xs = load(\"$temp\");"
+                     . "$commands;"
+                     . "save -ascii $temp xs";
+
+    open $fh, '<', $temp;
+    print while <$fh>;
+    close $fh;
+    unlink $temp;
   },
 
   stateful_unary_fn('average',
