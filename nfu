@@ -1904,8 +1904,10 @@ my %functions = (
 );
 
 my %bracket_handlers = (
-  ''  => sub {my $stuff = shell_quote @_;    "".qx|$0 --quote $stuff|},
-  '@' => sub {my $stuff = shell_quote @_; "sh:".qx|$0 --quote $stuff|},
+  ''  => sub {my $stuff = shell_quote @_;
+              "".qx|$0 --quote $stuff| =~ s/\s*$//r},
+  '@' => sub {my $stuff = shell_quote @_;
+              "sh:".(qx|$0 --quote $stuff| =~ s/\s*$//r)},
   q   => sub {shell_quote @_},
 );
 
