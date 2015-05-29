@@ -35,6 +35,8 @@ $SIG{CHLD} = sub {
   waitpid -1, WNOHANG;
 };
 
+$SIG{PIPE} = 'IGNORE';
+
 # NB: This import is not used in nfu directly; it's here so you can use these
 # functions inside aggregators.
 use List::Util qw(first max maxstr min minstr reduce shuffle sum);
