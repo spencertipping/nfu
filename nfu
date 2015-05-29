@@ -35,8 +35,6 @@ $SIG{CHLD} = sub {
   waitpid -1, WNOHANG;
 };
 
-$SIG{PIPE} = 'IGNORE';
-
 # NB: This import is not used in nfu directly; it's here so you can use these
 # functions inside aggregators.
 use List::Util qw(first max maxstr min minstr reduce shuffle sum);
@@ -1804,6 +1802,10 @@ my %functions = (
     my ($splitter, $cmd) = @_;
     my %fhs;
     my $f = compile_eval_into_function $splitter, 'partition function';
+
+    # Important: keep going even if a subprocess rejects data. Otherwise things
+    # like "nfu --partition ... ^T10" will produce truncated output.
+    $SIG{PIPE} = 'IGNORE';
 
     my @open_partitions;
     while (<>) {
