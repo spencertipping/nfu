@@ -603,8 +603,10 @@ my %gnuplot_aliases = (
   '%l' => ' with lines',
   '%d' => ' with dots',
   '%i' => ' with impulses',
+  '%v' => ' with vectors ',
   '%u' => ' using ',
   '%t' => ' title ',
+  '%p' => ' lc palette ',
 );
 
 sub expand_gnuplot_options {
