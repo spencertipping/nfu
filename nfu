@@ -1612,7 +1612,9 @@ my %functions = (
   },
 
   keep => sub {
-    my $f = compile_eval_into_function $_[0], 'keep function';
+    my $f = $_[0] =~ /^\d+$/
+          ? eval "sub {" . join("&&", map "\$_[$_]", split //, $_[0]) . "}"
+          : compile_eval_into_function $_[0], 'keep function';
     while (<>) {
       my $line = $_;
       be_verbose_as_appropriate length;
@@ -1623,7 +1625,9 @@ my %functions = (
   },
 
   remove => sub {
-    my $f = compile_eval_into_function $_[0], 'remove function';
+    my $f = $_[0] =~ /^\d+$/
+          ? eval "sub {" . join("&&", map "\$_[$_]", split //, $_[0]) . "}"
+          : compile_eval_into_function $_[0], 'remove function';
     while (<>) {
       my $line = $_;
       be_verbose_as_appropriate length;
