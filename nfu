@@ -83,6 +83,24 @@ sub dist {
   sqrt($s);
 }
 
+sub sdist {
+  # Spherical-coordinate great circle distance; you specify theta1, phi1,
+  # theta2, phi2, each in degrees; radius is assumed to be 1. Math from
+  # http://stackoverflow.com/questions/27928/how-do-i-calculate-distance-between-two-latitude-longitude-points
+  my ($t1, $p1, $t2, $p2) = map $_ / 180 * pi, @_;
+  my $dt = $t2 - $t1;
+  my $dp = $p2 - $p1;
+  my $a  = sin($dp / 2) * sin($dp / 2)
+         + cos($p1) * cos($p2) * sin($dt / 2) * sin($dt / 2);
+  2 * atan2(sqrt($a), sqrt(1 - $a));
+}
+
+sub edist {
+  # Earth distance between two latitudes/longitudes, in km; up to 0.5% error
+  my ($lat1, $lng1, $lat2, $lng2) = @_;
+  6371 * sdist $lng1, $lat1, $lng2, $lat2;
+}
+
 sub rect_polar { (dist(@_), atan2($_[0], $_[1]) / pi * 180) }
 sub polar_rect { ($_[0] * sin($_[1] / 180 * pi),
                   $_[0] * cos($_[1] / 180 * pi)) }
