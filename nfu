@@ -300,6 +300,8 @@ sub expand_filename_shorthands {
     # Evaluate a Perl expression
     $f =~ s/'/'"'"'/g;
     $result = "${original}perl -e 'print \$_, \"\\n\" for ($f)' |";
+  } elsif ($f =~ s/^n://) {
+    $result = "${original}perl -e 'print \$_, \"\\n\" for (1..($f))' |";
   } elsif ($f =~ s/^sql://) {
     # Run a postgres or sqlite3 query, exporting results as TSV
     my ($db, $query) = split /:/, $f, 2;
@@ -350,6 +352,7 @@ my %pseudofile_docs = (
   'hdfsjoin:path' => 'mapside join pseudofile (a subset of hdfs:path)',
   'sql:db:query'  => 'results of query as TSV',
   'perl:expr'     => 'perl -e \'print "$_\n" for (expr)\'',
+  'n:number'      => 'numbers from 1 to n, inclusive',
   'user@host:x'   => 'remote data access (x can be a pseudofile)',
 );
 
