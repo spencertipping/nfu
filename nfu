@@ -105,6 +105,9 @@ sub rect_polar { (dist(@_), atan2($_[0], $_[1]) / pi * 180) }
 sub polar_rect { ($_[0] * sin($_[1] / 180 * pi),
                   $_[0] * cos($_[1] / 180 * pi)) }
 
+sub degrees_radians { $_[0] / 180 * pi }
+sub radians_degrees { $_[0] / 180 * pi }
+
 # JSON support (if available)
 our $json;
 if (eval {require JSON}) {
@@ -153,25 +156,14 @@ sub write_lines {
   $filename;
 }
 
-sub rf {read_file @_}
-sub rl {read_lines @_}
-
-sub wf {write_file @_}
-sub wl {write_lines @_}
-
 sub json_encode {$json->encode(@_)}
 sub json_decode {$json->decode(@_)}
-
-sub je {json_encode @_}
-sub jd {json_decode @_}
 
 sub hadoop_counter {
   printf STDERR "reporter:counter:%s,%s,%d\n", $_[0] =~ y/,/_/r,
                                                $_[1] =~ y/,/_/r,
                                                $_[2] // 1;
 }
-
-sub hc {hadoop_counter @_}
 
 sub F {my $l = shift @_; (split /\t/, $l)[@_]}
 
@@ -223,9 +215,6 @@ sub geohash_decode {
           ungap_bits($gh >> 1) / 0x40000000 * 360 - 180);
 }
 
-sub ghe {geohash_encode @_}
-sub ghd {geohash_decode @_}
-
 # HTTP
 sub http_send { sprintf "HTTP/1.0 %s\nContent-Length: %d\n\n%s\n",
                         $_[0],
@@ -238,6 +227,24 @@ sub httpok   { sprintf "HTTP/1.0 200 OK\nContent-Length: %d\n\n%s\n",
 
 sub chunk    { sprintf "%x\r\n%s\r\n", length($_[0]), $_[0] }
 sub endchunk { chunk '' }
+
+# Function shorthands
+BEGIN {
+  *dr = \&degrees_radians;
+  *rd = \&radians_degrees;
+  *je = \&json_encode;
+  *jd = \&json_decode;
+
+  *hc = \&hadoop_counter;
+
+  *rf = \&read_file;
+  *rl = \&read_lines;
+  *wf = \&write_file;
+  *wl = \&write_lines;
+
+  *ghe = \&geohash_encode;
+  *ghd = \&geohash_decode;
+}
 
 # File functions
 sub random128 {join '', map sprintf('%04x', rand 65536), 0 .. 8}
