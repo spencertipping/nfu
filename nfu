@@ -1812,6 +1812,7 @@ my %functions = (
 
   tee => sub {
     open my $fh, "| $_[0]" or die "failed to launch $_[0]: $!";
+    $SIG{PIPE} = 'IGNORE';
     while (<>) {
       be_verbose_as_appropriate length;
       $fh->print($_);
@@ -1823,6 +1824,11 @@ my %functions = (
   duplicate => sub {
     open my $fh1, "| $_[0]" or die "failed to launch $_[0]: $!";
     open my $fh2, "| $_[1]" or die "failed to launch $_[1]: $!";
+
+    # Important: keep going even if a subprocess rejects data. Otherwise things
+    # like "nfu --duplicate ^T1 ^T+1" will produce truncated output.
+    $SIG{PIPE} = 'IGNORE';
+
     while (<>) {
       be_verbose_as_appropriate length;
       $fh1->print($_);
