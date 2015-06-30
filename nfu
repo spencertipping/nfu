@@ -1382,7 +1382,7 @@ my %functions = (
                      . "save -ascii $temp xs";
 
     open $fh, '<', $temp;
-    print while <$fh>;
+    print join("\t", map 0 + $_, grep length, split /\s+/), "\n" while <$fh>;
     close $fh;
     unlink $temp;
   },
