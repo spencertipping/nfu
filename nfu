@@ -1382,7 +1382,8 @@ my %functions = (
                      . "save -ascii $temp xs";
 
     open $fh, '<', $temp;
-    print join("\t", map 0 + $_, grep length, split /\s+/), "\n" while <$fh>;
+    print join("\t", map $_ eq "NA" ? $_ : 0 + $_, grep length, split /\s+/),
+          "\n" while <$fh>;
     close $fh;
     unlink $temp;
   },
