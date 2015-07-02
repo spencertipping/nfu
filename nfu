@@ -263,7 +263,9 @@ sub expand_filename_shorthands {
 
   my ($f, $always_make_a_command) = @_;
   my $result;
-  my $original = "#$f\n";
+  my $original = ($f =~ s/^/#/mgr) . "\n";
+
+  no warnings 'newline';
 
   if (-e $f || $f =~ s/^file://) {
     # It's really a filename, so push it onto @ARGV. If it's compressed, run it
