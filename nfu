@@ -265,7 +265,7 @@ sub expand_filename_shorthands {
   my $result;
   my $original = "#$f\n";
 
-  if (-e $f) {
+  if (-e $f || $f =~ s/^file://) {
     # It's really a filename, so push it onto @ARGV. If it's compressed, run it
     # through the appropriate decompressor first.
     my $piped = $f =~ s/^(.*\.gz)/cat '$1' | gzip -d/ri
@@ -527,7 +527,7 @@ my %arity = (
   plot       => 1,
   poll       => 2,
   read       => 0,
-  buffer     => 0,
+  buffer     => 1,
   sum        => 0,
   quant      => 1,
   remove     => 1,
@@ -1119,7 +1119,7 @@ my %functions = (
   },
 
   buffer => sub {
-    my $f = tmpnam;
+    my $f = $_[0] =~ /^[_-:]$/ ? tmpnam : $_[0];
     open my $fh, '>', $f or die "failed to open buffer file $f: $!";
     be_verbose_as_appropriate(length), $fh->print($_) while <>;
     close $fh;
