@@ -1119,7 +1119,7 @@ my %functions = (
   },
 
   buffer => sub {
-    my $f = $_[0] =~ /^[_-:]$/ ? tmpnam : $_[0];
+    my $f = $_[0] =~ /^[-_:]$/ ? tmpnam : $_[0];
     open my $fh, '>', $f or die "failed to open buffer file $f: $!";
     be_verbose_as_appropriate(length), $fh->print($_) while <>;
     close $fh;
