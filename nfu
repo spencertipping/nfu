@@ -288,8 +288,8 @@ sub expand_filename_shorthands {
   } elsif ($f =~ s/^hdfs-ls://) {
     # Just list a directory. This is used by hdfs: below to provide
     # indirection.
-    $result = "${original}echo '"
-            . join("\n", map "hdfs:" . shell_quote($_), hadoop_ls $f)
+    $result = "${original}$0 n:1 -m '"
+            . q{map "hdfs:" . shell_quote($_), hadoop_ls q[} . $f . q{]}
             . "' |";
   } elsif ($f =~ s/^hdfs://) {
     # Use Hadoop commands to read stuff. The command itself needs to be
