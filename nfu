@@ -1857,7 +1857,8 @@ my %functions = (
     while (<>) {
       be_verbose_as_appropriate length;
       my $line = $_;
-      my $p    = $f->(split /\t/, $line);
+      chomp(my $cline = $line);
+      my $p = $f->(split /\t/, $cline);
       unless (exists $fhs{$p}) {
         my $cmdsub = $cmd =~ s/\{\}/$p/gr;
         open $fhs{$p}, "| $cmdsub" or die "failed to launch $cmdsub: $!";
