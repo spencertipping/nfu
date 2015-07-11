@@ -271,7 +271,7 @@ sub expand_filename_shorthands {
     # It's really a filename, so push it onto @ARGV. If it's compressed, run it
     # through the appropriate decompressor first.
     my $piped = $f =~ s/^(.*\.gz)/cat '$1' | gzip -d/ri
-                   =~ s/^(.*\.bz2)/cat '$1' | bzip -d/ri
+                   =~ s/^(.*\.bz2)/cat '$1' | bzip2 -d/ri
                    =~ s/^(.*\.xz)/cat '$1' | xz -d/ri
                    =~ s/^(.*\.lzo)/cat '$1' | lzop -d/ri;
     $result = $piped =~ /\|/ ? "$original$piped |" : $piped;
