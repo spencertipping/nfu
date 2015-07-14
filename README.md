@@ -59,7 +59,7 @@ where each command is one of the following:
      --append     (1) <pseudofile; appends its contents to current stream>
   -a|--average    (0) -- window size (0 for full average) -- running average
   -b|--branch     (1) <branch (takes a pattern map)>
-  -R|--buffer     (0) -- creates a pseudofile from the data stream
+  -R|--buffer     (1) <creates a pseudofile from the data stream>
   -c|--count      (0) -- counts by first column value; like uniq -c
   -S|--delta      (0) -- value -> difference from last value
   -D|--drop       (0) -- number of records to drop
@@ -85,6 +85,7 @@ where each command is one of the following:
      --mplot      (1) <gnuplot arguments per column, separated by ;>
   -N|--ntiles     (1) <takes N, produces ntiles of numbers>
   -n|--number     (0) -- prepends line number to each line
+     --octave     (1) <pipe through octave; vector is called xs>
   -o|--order      (0) -- sorts ascending by general numeric value
      --partition  (2) <partition id fn, shell command (using {})>
      --pipe       (1) <shell command to pipe through>
@@ -142,6 +143,8 @@ pseudofile patterns:
   hdfs:path      read HDFS file(s) with hadoop fs -text
   hdfsjoin:path  mapside join pseudofile (a subset of hdfs:path)
   http[s]://url  retrieve url with curl
+  id:X           verbatim text X
+  n:number       numbers from 1 to n, inclusive
   perl:expr      perl -e 'print "$_\n" for (expr)'
   s3://url       access S3 using s3cmd
   sh:stuff       run sh -c "stuff", take stdout
@@ -153,8 +156,10 @@ gnuplot expansions:
   %d -> ' with dots'
   %i -> ' with impulses'
   %l -> ' with lines'
+  %p -> ' lc palette '
   %t -> ' title '
   %u -> ' using '
+  %v -> ' with vectors '
 
 SQL expansions:
 
