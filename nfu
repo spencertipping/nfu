@@ -47,6 +47,7 @@ sub row {join "\t", map s/\n//gr, @_}
 # Order-preserving unique values for strings. This is just too useful not to
 # provide.
 sub uniq {
+  local $_;
   my %seen;
   my @order;
   $seen{$_}++ or push @order, $_ for @_;
@@ -54,6 +55,7 @@ sub uniq {
 }
 
 sub frequencies {
+  local $_;
   my %freqs;
   ++$freqs{$_} for @_;
   %freqs;
@@ -63,6 +65,7 @@ sub mean {scalar @_ && sum(@_) / @_}
 sub log2 {log($_[0]) / LOG_2}
 
 sub entropy {
+  local $_;
   my $s = sum(@_) || 1;
   my $t = 0;
   $t -= ($_ / $s) * log($_ / $s) for @_;
@@ -70,6 +73,7 @@ sub entropy {
 }
 
 sub dot {
+  local $_;
   my ($u, $v) = @_;
   my $s = 0;
   $s += $$u[$_] * $$v[$_] for 0 .. min($#{$u}, $#{$v});
@@ -78,6 +82,7 @@ sub dot {
 
 sub dist {
   # Euclidean distance (you specify the deltas)
+  local $_;
   my $s = 0;
   $s += $_*$_ for @_;
   sqrt($s);
@@ -87,6 +92,7 @@ sub sdist {
   # Spherical-coordinate great circle distance; you specify theta1, phi1,
   # theta2, phi2, each in degrees; radius is assumed to be 1. Math from
   # http://stackoverflow.com/questions/27928/how-do-i-calculate-distance-between-two-latitude-longitude-points
+  local $_;
   my ($t1, $p1, $t2, $p2) = map $_ / 180 * pi, @_;
   my $dt = $t2 - $t1;
   my $dp = $p2 - $p1;
@@ -141,6 +147,7 @@ sub write_file {
 }
 
 sub read_lines {
+  local $_;
   open my $fh, expand_filename_shorthands $_[0], 1;
   my @result;
   chomp, push @result, $_ for <$fh>;
@@ -149,6 +156,7 @@ sub read_lines {
 }
 
 sub write_lines {
+  local $_;
   my $filename = shift @_;
   open my $fh, '>', $filename;
   $fh->print($_, "\n") for @_;
@@ -189,6 +197,7 @@ sub ungap_bits {
 }
 
 sub geohash_encode {
+  local $_;
   my ($lat, $lng, $precision) = @_;
   $precision //= 12;
   my $bits = $precision > 0 ? $precision * 5 : -$precision;
@@ -202,6 +211,7 @@ sub geohash_encode {
 }
 
 sub geohash_decode {
+  local $_;
   my ($gh, $bits) = @_;
   unless (defined $bits) {
     # Decode gh from base-32
