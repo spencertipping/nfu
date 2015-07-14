@@ -945,7 +945,7 @@ sub hadoop_into {
   my $line = undef;
   unless (-t STDIN) {
     chomp($line), push @input_files, '-input', $line
-    while ($line = <STDIN>) =~ s/^hdfs://;
+    while defined($line = <STDIN>) && $line =~ s/^hdfs://;
   }
 
   # At this point $line is either undefined or contains a line we shouldn't
