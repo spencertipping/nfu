@@ -2234,8 +2234,10 @@ if ($explain) {
       unless (fork) {
         # We're the child, so do STDOUT redirection.
         close $new_reader or die "failed to close pipe reader: $!";
+        POSIX::close(0) or die "failed to close stdin" if defined $reader;
         dup2(fileno($reader), 0) or die "failed to dup input: $!"
           if defined $reader;
+        POSIX::close(1);
         dup2(fileno($writer), 1) or die "failed to dup stdout: $!";
 
         close $reader or die "failed to close reader: $!" if defined $reader;
@@ -2251,6 +2253,7 @@ if ($explain) {
     } else {
       # We've hit the end of the chain. Preserve stdout, redirect stdin from
       # current reader.
+      POSIX::close(0) or die "failed to close stdin" if defined $reader;
       dup2(fileno($reader), 0) or die "failed to dup input: $!"
         if defined $reader;
       close $reader or die "failed to close reader: $!" if defined $reader;
