@@ -2234,8 +2234,6 @@ if ($explain) {
       unless (fork) {
         # We're the child, so do STDOUT redirection.
         close $new_reader or die "failed to close pipe reader: $!";
-        close STDIN if defined $reader;
-        close STDOUT;
         dup2(fileno($reader), 0) or die "failed to dup input: $!"
           if defined $reader;
         dup2(fileno($writer), 1) or die "failed to dup stdout: $!";
@@ -2253,14 +2251,12 @@ if ($explain) {
     } else {
       # We've hit the end of the chain. Preserve stdout, redirect stdin from
       # current reader.
-      close STDIN if defined $reader;
       dup2(fileno($reader), 0) or die "failed to dup input: $!"
         if defined $reader;
       close $reader or die "failed to close reader: $!" if defined $reader;
       $verbose_command = $command;
       @verbose_args    = @args;
       $functions{$command}->(@args);
-      exit;
     }
 
     # Prevent <> from reading files after the first iteration (this is such a
