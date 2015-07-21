@@ -629,7 +629,7 @@ my %usages = (
 );
 
 my %env_docs = (
-  NFU_SORT_BUFFER      => 'default 256M; size of in-memory sort for -g and -o',
+  NFU_SORT_BUFFER      => 'default 64M; size of in-memory sort for -g and -o',
   NFU_SORT_PARALLEL    => 'default 4; number of concurrent sorts to run',
   NFU_SORT_COMPRESS    => 'default none; compression program for sort tempfiles',
   NFU_ALWAYS_VERBOSE   => 'if set, nfu will be verbose all the time',
@@ -782,7 +782,7 @@ sub exec_with_diamond {
 sub sort_options {
   my ($column_spec) = @_;
   my @columns       = split //, $column_spec // '';
-  return '-S', $ENV{NFU_SORT_BUFFER} || '256M',
+  return '-S', $ENV{NFU_SORT_BUFFER} || '64M',
          '--parallel=' . ($ENV{NFU_SORT_PARALLEL} || 4),
          (@columns
            ? ('-t', "\t",
