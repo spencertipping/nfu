@@ -769,11 +769,7 @@ sub exec_with_stdin {
 }
 
 sub exec_with_diamond {
-  # HACK: for some reason, process indirection involving 'sort' loses data on
-  # some systems. I'm not sure why. The workaround for now is to make sure that
-  # we inline-exec sort unless we've got piped inputs (at which point our hand
-  # is forced).
-  if ($verbose && $_[0] ne 'sort' || grep /\|/, @ARGV) {
+  if ($verbose || grep /\|/, @ARGV) {
     # Arguments are specified in filenames and involve processes, so use perl
     # to forward data.
     exec_with_stdin @_;
@@ -1822,7 +1818,11 @@ my %functions = (
     close $fh;
   },
 
-  pipe => sub { exec $_[0] or die "failed to launch $_[0]: $!" },
+  pipe => sub {
+    open my $fh, "| $_[0]" or die "failed to launch $_[0]: $!";
+    be_verbose_as_appropriate(length), print $fh $_ while <>;
+    close $fh;
+  },
 
   tee => sub {
     open my $fh, "| $_[0]" or die "failed to launch $_[0]: $!";
@@ -2253,6 +2253,7 @@ if ($explain) {
       # current reader.
       dup2(fileno($reader), 0) or die "failed to dup input: $!"
         if defined $reader;
+      close $reader or die "failed to close reader: $!" if defined $reader;
       $verbose_command = $command;
       @verbose_args    = @args;
       $functions{$command}->(@args);
