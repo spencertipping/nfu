@@ -2248,6 +2248,7 @@ if ($explain) {
         exit;
       } else {
         close $writer or die "failed to close pipe writer: $!";
+        close $reader if defined $reader;
         $reader = $new_reader;
       }
     } else {
