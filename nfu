@@ -32,7 +32,7 @@ our $diamond_has_data = 1;
 # formal teardown.
 $SIG{CHLD} = sub {
   local ($!, $?);
-  waitpid -1, WNOHANG;
+  1 while waitpid(-1, WNOHANG) > 0;
 };
 
 # NB: This import is not used in nfu directly; it's here so you can use these
