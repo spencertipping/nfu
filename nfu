@@ -405,6 +405,7 @@ our $verbose_row         = 0;
 # }
 sub be_verbose_as_appropriate {
   return unless $verbose;
+  local $_;
   my ($record_length) = @_;
   $n_lines += !!$record_length;
   $n_bytes += $record_length;
