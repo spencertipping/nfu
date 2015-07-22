@@ -637,6 +637,7 @@ my %env_docs = (
   NFU_NO_PAGER         => 'if set, nfu will not use "less" to preview stdout',
   NFU_PMAP_PARALLELISM => 'number of subprocesses for -M',
   NFU_MAX_FILEHANDLES  => 'default 64; maximum #subprocesses for --partition',
+  NFU_HADOOP_FILES     => 'comma-separated files to include with streaming job',
   NFU_HADOOP_STREAMING => 'absolute location of hadoop-streaming.jar',
   NFU_HADOOP_OPTIONS   => '-D options for hadoop streaming jobs',
   NFU_HADOOP_COMMAND   => 'hadoop executable; e.g. hadoop jar, hadoop fs -ls',
@@ -987,7 +988,8 @@ sub hadoop_into {
 
   # Now all the input files are in place, so we can kick off the job.
   my $extra_args = $ENV{NFU_HADOOP_OPTIONS} // '';
-  my @self_dep   = ('-file', $0);
+  my @file_deps  = map {('-file', $_)}
+                   ($0, split /,/, $ENV{NFU_HADOOP_FILES} // '');
   my $dirname    = $0 =~ s/\/nfu$/\//r;
 
   # We're uploading ourselves, so we'll need a current-directory reference to
@@ -1026,7 +1028,7 @@ sub hadoop_into {
     hadoop('jar',
            shell_quote($streaming_jar)
            . " -D mapred.job.name=" . shell_quote($jobname) . " $extra_args",
-           @self_dep,
+           @file_deps,
            @input_files,
            '-file',    $mapper_file,
            '-file',    $reducer_file,
