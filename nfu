@@ -61,6 +61,13 @@ sub frequencies {
   %freqs;
 }
 
+sub round_to {
+  my ($x, $quantum) = @_;
+  $quantum ||= 1;
+  my $sign = $x < 0 ? -1 : 1;
+  int(abs($x) / $quantum + 0.5) * $quantum * $sign;
+}
+
 sub mean {scalar @_ && sum(@_) / @_}
 sub log2 {log($_[0]) / LOG_2}
 
@@ -1512,9 +1519,7 @@ my %functions = (
 
   stateless_unary_fn('quant', sub {
     my ($x, $quantum) = @_;
-    $quantum ||= 1.0;
-    my $sign = $x < 0 ? -1 : 1;
-    int(abs($x) / $quantum + 0.5) * $quantum * $sign;
+    round_to $x, $quantum;
   }),
 
   # Note: this needs to be stdin; otherwise "nfu -p %l filename" will fail
