@@ -304,12 +304,15 @@ sub expand_filename_shorthands {
   } elsif ($f =~ s/^hdfs://) {
     # Use Hadoop commands to read stuff. The command itself needs to be
     # deferred because the hdfs path might not exist when the pseudofile is
-    # resolved.
+    # resolved. Indirected through $0 hdfs-ls:X because some HDFS directories
+    # contain enough files that we'll get arg-list-too-long errors if we invoke
+    # hadoop fs -text directly. This workaround lets us stream the output from
+    # hadoop fs -ls.
     #
     # Redirecting errors to /dev/null because hadoop fs -text complains loudly
     # if you close its output stream, and this is really annoying.
-    $result = "${original}hadoop fs -text " . shell_quote(hadoop_ls $f)
-                                            . " 2>/dev/null |";
+    $f = shell_quote "hdfs-ls:$f";
+    $result = "${original}$0 $f | xargs hadoop fs -text 2>/dev/null |";
   } elsif ($f =~ s/^hdfsjoin://) {
     $result = "${original}$0 "
             . shell_quote(map "hdfs:$_",
@@ -370,6 +373,7 @@ my %pseudofile_docs = (
   'sh:stuff'      => 'run sh -c "stuff", take stdout',
   's3://url'      => 'access S3 using s3cmd',
   'hdfs:path'     => 'read HDFS file(s) with hadoop fs -text',
+  'hdfs-ls:path'  => 'pseudofiles parsed from hadoop fs -ls',
   'hdfsjoin:path' => 'mapside join pseudofile (a subset of hdfs:path)',
   'sql:db:query'  => 'results of query as TSV',
   'perl:expr'     => 'perl -e \'print "$_\n" for (expr)\'',
@@ -475,7 +479,7 @@ my %explosions = (
   F => '--fieldsplit',
   g => '--group',
   G => '--rgroup',
-  # h => '--help'               # handled during option parsing
+  h => '--hadoopc',
   H => '--hadoop',
   i => '--index',
   I => '--indexouter',
@@ -524,6 +528,7 @@ my %arity = (
   group      => 0,
   rgroup     => 0,
   hadoop     => 3,
+  hadoopc    => 4,
   index      => 2,
   indexouter => 2,
   join       => 2,
@@ -585,6 +590,7 @@ my %usages = (
   group      => 'sorts ascending, takes optional column list',
   rgroup     => 'sorts descending, takes optional column list',
   hadoop     => 'hadoop streaming: outpath|.|@, mapper|:, reducer|:|_',
+  hadoopc    => 'hadoop streaming: ..., combiner|:|_, reducer|:|_',
   index      => 'field index, unsorted pseudofile to join against',
   indexouter => 'field index, unsorted pseudofile to join against',
   join       => 'field index, sorted pseudofile to join against',
@@ -917,15 +923,18 @@ sub find_hadoop_streaming {
 }
 
 sub hadoop_into {
-  my ($outfile, $mapper, $reducer) = @_;
+  my ($outfile, $mapper, $combiner, $reducer) = @_;
   my $streaming_jar = $ENV{NFU_HADOOP_STREAMING} // find_hadoop_streaming;
 
   # Various shorthands for common cases. Both mapper and reducer being the
   # identity function is used to repartition stuff, so we want this to be easy
   # to type and recognize.
-  $mapper  = $0     if $mapper  eq ':';
-  $reducer = $0     if $reducer eq ':';
-  $reducer = 'NONE' if $reducer =~ /^[-_]$/;
+  $mapper   = $0     if $mapper   eq ':';
+  $reducer  = $0     if $reducer  eq ':';
+  $reducer  = 'NONE' if $reducer  =~ /^[-_]$/;
+  $combiner = $0     if $combiner eq ':';
+  $combiner = 'NONE' if $combiner =~ /^[-_]$/;
+  $combiner = 'NONE' if $reducer  eq 'NONE';
 
   my @input_files;
   my @delete_afterwards;
@@ -995,8 +1004,9 @@ sub hadoop_into {
   # We're uploading ourselves, so we'll need a current-directory reference to
   # nfu. When nfu quotes itself, it produces an absolute path instead; this
   # code rewrites those into ./nfu.
-  my $transformed_mapper  = $mapper  =~ s|\Q$dirname\E|./|gr;
-  my $transformed_reducer = $reducer =~ s|\Q$dirname\E|./|gr;
+  my $transformed_mapper   = $mapper   =~ s|\Q$dirname\E|./|gr;
+  my $transformed_combiner = $combiner =~ s|\Q$dirname\E|./|gr;
+  my $transformed_reducer  = $reducer  =~ s|\Q$dirname\E|./|gr;
 
   # Write the mapper and reducer commands into files rather than passing them
   # straight to hadoop streaming. This bypasses two problems:
@@ -1004,24 +1014,33 @@ sub hadoop_into {
   # 1. Hadoop streaming might chop long arguments sooner than bash.
   # 2. It word-splits differently from bash, which breaks shell_quote.
 
-  my $mapper_file  = tmpnam;
-  my $reducer_file = tmpnam;
+  my $mapper_file   = tmpnam;
+  my $combiner_file = tmpnam;
+  my $reducer_file  = tmpnam;
 
   open my $mapper_fh,  '>', $mapper_file
     or die "failed to create tempfile $mapper_file for map job: $!";
+  open my $combiner_fh,  '>', $combiner_file
+    or die "failed to create tempfile $combiner_file for combine job: $!";
   open my $reducer_fh, '>', $reducer_file
     or die "failed to create tempfile $reducer_file for reduce job: $!";
-  print $mapper_fh  "#!/bin/bash\n$transformed_mapper\n";
-  print $reducer_fh "#!/bin/bash\n$transformed_reducer\n";
+  print $mapper_fh   "#!/bin/bash\n$transformed_mapper\n";
+  print $combiner_fh "#!/bin/bash\n$transformed_combiner\n";
+  print $reducer_fh  "#!/bin/bash\n$transformed_reducer\n";
   close $mapper_fh;
+  close $combiner_fh;
   close $reducer_fh;
 
   chmod 0755, $mapper_file;
+  chmod 0755, $combiner_file;
   chmod 0755, $reducer_file;
 
   my $jobname = "nfu streaming ["
               . join(' ', grep $_ ne '-input', @input_files)
-              . "]: map($transformed_mapper), reduce($transformed_reducer)"
+              . "]: map($transformed_mapper), "
+              . "combine($transformed_combiner), "
+              . "reduce($transformed_reducer), "
+              . "options($extra_args)"
               . " > $outfile";
 
   my $hadoop_command =
@@ -1031,9 +1050,13 @@ sub hadoop_into {
            @file_deps,
            @input_files,
            '-file',    $mapper_file,
+           '-file',    $combiner_file,
            '-file',    $reducer_file,
            '-output',  $outfile,
            '-mapper',  "./" . ($mapper_file =~ s/^.*\///r),
+           $combiner ne 'NONE'
+             ? ('-combiner', "./" . ($combiner_file =~ s/^.*\///r))
+             : (),
            '-reducer', $reducer eq 'NONE'
                          ? $reducer
                          : "./" . ($reducer_file =~ s/^.*\///r));
@@ -1042,6 +1065,7 @@ sub hadoop_into {
     and die "failed to execute hadoop command $hadoop_command: $!";
 
   unlink $mapper_file;
+  unlink $combiner_file;
   unlink $reducer_file;
 
   system hadoop('fs', '-rm', '-r', @delete_afterwards) . ' 1>&2'
@@ -1881,13 +1905,13 @@ my %functions = (
     close for values %fhs;
   },
 
-  hadoop => sub {
-    my ($outfile, $mapper, $reducer) = @_;
+  hadoopc => sub {
+    my ($outfile, $mapper, $combiner, $reducer) = @_;
     if ($outfile eq '.') {
       # Print output data to stdout, then delete outfile
       my $filename  = hadoop_tempfile;
       my @partfiles = map s/^hdfs://r,
-                          hadoop_ls hadoop_into $filename, $mapper, $reducer;
+                          hadoop_ls hadoop_into $filename, $mapper, $combiner, $reducer;
       open my $fh, "| xargs hadoop fs -text"
         or die "failed to execute xargs: $!";
       $fh->print("$_\n") for @partfiles;
@@ -1895,7 +1919,25 @@ my %functions = (
       system hadoop('fs', '-rm', '-r', $filename) . ' 1>&2';
     } else {
       $outfile = hadoop_tempfile if $outfile eq '@';
-      print hadoop_into($outfile, $mapper, $reducer), "\n";
+      print hadoop_into($outfile, $mapper, $combiner, $reducer), "\n";
+    }
+  },
+
+  hadoop => sub {
+    my ($outfile, $mapper, $reducer) = @_;
+    if ($outfile eq '.') {
+      # Print output data to stdout, then delete outfile
+      my $filename  = hadoop_tempfile;
+      my @partfiles = map s/^hdfs://r,
+                          hadoop_ls hadoop_into $filename, $mapper, 'NONE', $reducer;
+      open my $fh, "| xargs hadoop fs -text"
+        or die "failed to execute xargs: $!";
+      $fh->print("$_\n") for @partfiles;
+      close $fh;
+      system hadoop('fs', '-rm', '-r', $filename) . ' 1>&2';
+    } else {
+      $outfile = hadoop_tempfile if $outfile eq '@';
+      print hadoop_into($outfile, $mapper, 'NONE', $reducer), "\n";
     }
   },
 
