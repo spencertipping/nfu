@@ -306,7 +306,7 @@ sub expand_filename_shorthands {
     # Just list a directory. This is used by hdfs: below to provide
     # indirection.
     $result = "${original}$0 n:1 -m '"
-            . q{map "hdfs:" . shell_quote($_), hadoop_ls q[} . $f . q{]}
+            . q{map "hdfs:" . shell_quote($_), hadoop_ls %[q[} . $f . q{]%]}
             . "' |";
   } elsif ($f =~ s/^hdfs://) {
     # Use Hadoop commands to read stuff. The command itself needs to be
@@ -724,12 +724,18 @@ sub expand_postgres_db {
 }
 
 sub expand_eval_shorthands {
-  my $code = $_[0] =~ s/%(\d+)/\$_[$1]/gr;
-  1 while $code =~ s/([a-zA-Z0-9_\)\}\]?\$])
+  my $code   = $_[0] =~ s/%(\d+)/\$_[$1]/gr;
+  my @pieces = split /%\[(.*?)%\]/, $code;
+  for my $i (0..$#pieces) {
+    unless ($i & 1) {
+      1 while $pieces[$i]
+                =~ s/([a-zA-Z0-9_\)\}\]?\$])
                      \.
                      ([\$_a-zA-Z](?:-[0-9\w?\$]|[0-9_\w?\$])*)
                     /$1\->{'$2'}/x;
-  $code;
+    }
+  }
+  join '', @pieces;
 }
 
 sub parse_join_options {
