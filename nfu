@@ -2282,22 +2282,22 @@ if ($explain) {
       @verbose_args    = @args;
       unless (fork) {
         # We're the child, so do STDOUT redirection.
-        POSIX::close(fileno $new_reader) or die "failed to close pipe reader: $!";
+        close $new_reader or die "failed to close pipe reader: $!";
         POSIX::close(0) or die "failed to close stdin" if defined $reader;
         dup2(fileno($reader), 0) or die "failed to dup input: $!"
           if defined $reader;
         POSIX::close(1);
         dup2(fileno($writer), 1) or die "failed to dup stdout: $!";
 
-        POSIX::close(fileno $reader) or die "failed to close reader: $!" if defined $reader;
-        POSIX::close(fileno $writer) or die "failed to close writer: $!";
+        close $reader or die "failed to close reader: $!" if defined $reader;
+        close $writer or die "failed to close writer: $!";
 
         # The function here may never return.
         $functions{$command}->(@args);
         exit;
       } else {
-        POSIX::close(fileno $writer) or die "failed to close pipe writer: $!";
-        POSIX::close(fileno $reader) if defined $reader;
+        close $writer or die "failed to close pipe writer: $!";
+        close $reader if defined $reader;
         $reader = $new_reader;
       }
     } else {
@@ -2306,7 +2306,7 @@ if ($explain) {
       POSIX::close(0) or die "failed to close stdin" if defined $reader;
       dup2(fileno($reader), 0) or die "failed to dup input: $!"
         if defined $reader;
-      POSIX::close(fileno $reader) or die "failed to close reader: $!" if defined $reader;
+      close $reader or die "failed to close reader: $!" if defined $reader;
       $verbose_command = $command;
       @verbose_args    = @args;
       $functions{$command}->(@args);
