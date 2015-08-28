@@ -726,10 +726,11 @@ sub expand_postgres_db {
 }
 
 sub expand_eval_shorthands {
-  my $code   = $_[0] =~ s/%(\d+)/\$_[$1]/gr;
+  my $code   = $_[0]
   my @pieces = split /%\[(.*?)%\]/, $code;
   for my $i (0..$#pieces) {
     unless ($i & 1) {
+      $pieces[$i] =~ s/%(\d+)/\$_[$1]/gr;
       1 while $pieces[$i]
                 =~ s/([a-zA-Z0-9_\)\}\]?\$])
                      \.
