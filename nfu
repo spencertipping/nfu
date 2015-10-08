@@ -1684,7 +1684,7 @@ my %functions = (
     my $i     = 0;
 
     for (1 .. $ENV{NFU_PMAP_PARALLELISM} // 16) {
-      my $mapper = quote_self map(('--run', $_), @evaled_code), '--map', $_[0];
+      my $mapper = quote_self @evaled_code, '--map', $_[0];
       open my $fh, "| $mapper"
         or die "failed to open child process $mapper: $!";
 
@@ -2225,13 +2225,13 @@ while (@args_to_parse) {
     push @parsed, [$command, @args];
   } elsif ($command eq 'run') {
     my $x = shift @args_to_parse;
-    push @evaled_code, $x;
+    push @evaled_code, '--run', $x;
     eval $x;
     die "failed to run '$x': $@" if $@;
   } elsif ($command eq 'use') {
     my $x = shift @args_to_parse;
     my $s = read_file $x;       # you can --use pseudofiles, woot!
-    push @evaled_code, $s;
+    push @evaled_code, '--use', $x;
     eval $s;
     die "failed to use '$x': $@" if $@;
   } elsif ($command eq 'explain') {
@@ -2257,7 +2257,7 @@ while (@args_to_parse) {
 if ($quote_self) {
   # Quote all other arguments so a shell will parse them correctly.
   print quote_self($verbose ? ('--verbose') : (),
-                   map(('--run', $_), @evaled_code),
+                   @evaled_code,
                    map(("--$$_[0]", @$_[1..$#$_]), @parsed),
                    @ARGV), "\n";
   exit 0;
