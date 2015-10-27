@@ -2208,6 +2208,7 @@ sub explode {
   map {$explosions{$_} // $_} grep length, split /([-+.\d]*),?/, $_[0];
 }
 
+my %custom_env;
 my @parsed;
 my $quote_self = 0;
 my $explain    = 0;
@@ -2223,6 +2224,8 @@ while (@args_to_parse) {
                              || ! -e $args_to_parse[0]
                                 && $args_to_parse[0] =~ /^[-+]?\d+/);
     push @parsed, [$command, @args];
+  } elsif ($command =~ /(\w+)=(.*)/) {
+    $ENV{$1} = $custom_env{$1} = $2;
   } elsif ($command eq 'run') {
     my $x = shift @args_to_parse;
     push @evaled_code, '--run', $x;
@@ -2257,6 +2260,7 @@ while (@args_to_parse) {
 if ($quote_self) {
   # Quote all other arguments so a shell will parse them correctly.
   print quote_self($verbose ? ('--verbose') : (),
+                   map("$_=$custom_env{$_}", keys %custom_env),
                    @evaled_code,
                    map(("--$$_[0]", @$_[1..$#$_]), @parsed),
                    @ARGV), "\n";
