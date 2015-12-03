@@ -518,6 +518,9 @@ my %explosions = (
   z => '--intify',
 );
 
+my %implosions;
+$implosions{$explosions{$_}} = $_ for keys %explosions;
+
 # Minimum number of required arguments for each function. Numeric arguments are
 # automatically forwarded, so are always optional.
 my %arity = (
@@ -667,6 +670,12 @@ my %gnuplot_aliases = (
   '%u' => ' using ',
   '%t' => ' title ',
   '%p' => ' lc palette ',
+);
+
+my %fieldsplit_shorthands = (
+  S => '\s+',
+  W => '\W+',
+  C => ',',
 );
 
 sub expand_gnuplot_options {
@@ -1553,12 +1562,24 @@ my %functions = (
   mplot => sub {
     my @gnuplot_options = split /;/, join ' ', expand_gnuplot_options @_;
     my $fname = tmpnam;
+    my $cols  = 0;
     open my $fh, '>', $fname or die "failed to open tempfile for mplot: $!";
-    $fh->print($_) while <>;
+    while (<>) {
+      be_verbose_as_appropriate length;
+      $cols = max $cols, 1 + scalar(my @xs = /\t/g);
+      print $fh $_;
+    }
     close $fh;
-    system 'gnuplot', '-e',
-           'plot ' . join(',', map("\"$fname\" $_", @gnuplot_options)),
-           '-persist';
+
+    # If we're requesting only one plot, assume the intent is to replicate
+    # those settings across every observed column.
+    my $plot_command =
+      'plot ' . join ',',
+                  @gnuplot_options > 1
+                    ? map("\"$fname\" $_", @gnuplot_options)
+                    : map("\"$fname\" using $_ $gnuplot_options[0]", 1..$cols);
+
+    system 'gnuplot', '-e', $plot_command, '-persist';
 
     # HACK: the problem is that gnuplot internally forks a subprocess for the
     # plot window, which we won't be able to see from here (that I know of). If
@@ -1763,7 +1784,9 @@ my %functions = (
   },
 
   fieldsplit => sub {
-    my $delim = qr/$_[0]/;
+    my $pattern = $implosions{$_[0]} // $_[0];
+    $pattern    = $fieldsplit_shorthands{$pattern} // $pattern;
+    my $delim   = qr/$pattern/;
     while (<>) {
       be_verbose_as_appropriate length;
       chomp;
