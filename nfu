@@ -391,6 +391,7 @@ my %pseudofile_docs = (
 );
 
 # Flags
+our $is_child   = 0;
 our $verbose    = 0;
 our $n_lines    = 0;
 our $n_bytes    = 0;
@@ -416,6 +417,7 @@ our $verbose_row         = 0;
 #   ...
 # }
 sub be_verbose_as_appropriate {
+  return if $is_child;
   return unless $verbose;
   local $_;
   my ($record_length) = @_;
@@ -1705,7 +1707,7 @@ my %functions = (
     my $i     = 0;
 
     for (1 .. $ENV{NFU_PMAP_PARALLELISM} // 16) {
-      my $mapper = quote_self @evaled_code, '--map', $_[0];
+      my $mapper = quote_self '--child', @evaled_code, '--map', $_[0];
       open my $fh, "| $mapper"
         or die "failed to open child process $mapper: $!";
 
@@ -2265,6 +2267,8 @@ while (@args_to_parse) {
   } elsif ($command eq 'verbose' || $command eq 'v') {
     print STDERR "\033[2J" unless $quote_self;
     $verbose = 1;
+  } elsif ($command eq 'child') {
+    $is_child = 1;
   } elsif ($command eq 'quote') {
     $quote_self = 1;
   } else {
