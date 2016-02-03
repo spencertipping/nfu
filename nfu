@@ -1448,6 +1448,7 @@ my %functions = (
            '-q',
            '--eval', "xs = load(\"$temp\");"
                      . "$commands;"
+                     . "format long;"
                      . "save -ascii $temp xs";
 
     open $fh, '<', $temp;
