@@ -1447,11 +1447,13 @@ my %functions = (
     system 'octave',
            '-q',
            '--eval', "xs = load(\"$temp\");"
+                     . "save_precision(48);"
                      . "$commands;"
-                     . "format long;"
-                     . "save -ascii $temp xs";
+                     . "save -text $temp xs";
 
     open $fh, '<', $temp;
+    /^\s*#/ or
+    /^\s*$/ or
     print join("\t", map $_ eq "NA" ? $_ : 0 + $_, grep length, split /\s+/),
           "\n" while <$fh>;
     close $fh;
