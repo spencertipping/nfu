@@ -125,24 +125,26 @@ sub line_opposite {
 
 sub parse_wkt {
   my @rings  = map [/([-0-9.]+)\s+([-0-9.]+)/g], split /\)\s*,\s*\(/, $_[0];
-  my $ylimit = 1 + max map @$_, @rings;
+  my $ylimit = 1 + max map max(@$_), @rings;
   {
     rings => [map [map $_ + 0, @$_], @rings],
     ylimit => $ylimit
   }
 }
 
-sub inpoly {
+sub in_poly {
   # Returns true if a point resides in the given parsed polygon.
   my ($x, $y, $parsed) = @_;
   my $ylimit = $parsed->{ylimit};
   my $hits = 0;
-  for my $r ($parsed->{rings}) {
+  for my $r (@{$parsed->{rings}}) {
     my ($lx, $ly) = @$r[0, 1];
-    for (my $i = 2; $i < @$r; ++$i) {
-      my ($cx, $cy) = @$r[$i, $i + 1];
-      $hits += line_opposite $lx, $ly, $cx - $lx, $cy - $ly,
-                             $x, $y, $x, $ylimit;
+    for (my $i = 2; $i < @$r; $i += 2) {
+      my $cx = $$r[$i];
+      my $cy = $$r[$i + 1];
+      ++$hits if $lx <= $x && $x < $cx || $lx >= $x && $x > $cx
+             and line_opposite $lx, $ly, $cx - $lx, $cy - $ly,
+                               $x, $y, $x, $ylimit;
       $lx = $cx;
       $ly = $cy;
     }
