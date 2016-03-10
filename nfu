@@ -115,6 +115,41 @@ sub edist {
   6371 * sdist $lng1, $lat1, $lng2, $lat2;
 }
 
+sub line_opposite {
+  # Returns true if two points are on opposite sides of the line starting at
+  # (x0, y0) and whose direction is (dx, dy).
+  my ($x0, $y0, $dx, $dy, $x1, $y1, $x2, $y2) = @_;
+  return (($x1 - $x0) * $dy - ($y1 - $y0) * $dx)
+       * (($x2 - $x0) * $dy - ($y2 - $y0) * $dx) < 0;
+}
+
+sub parse_wkt {
+  my @rings  = map [/([-0-9.]+)\s+([-0-9.]+)/g], split /\)\s*,\s*\(/, $_[0];
+  my $ylimit = 1 + max map @$_, @rings;
+  {
+    rings => [map [map $_ + 0, @$_], @rings],
+    ylimit => $ylimit
+  }
+}
+
+sub inpoly {
+  # Returns true if a point resides in the given parsed polygon.
+  my ($x, $y, $parsed) = @_;
+  my $ylimit = $parsed->{ylimit};
+  my $hits = 0;
+  for my $r ($parsed->{rings}) {
+    my ($lx, $ly) = @$r[0, 1];
+    for (my $i = 2; $i < @$r; ++$i) {
+      my ($cx, $cy) = @$r[$i, $i + 1];
+      $hits += line_opposite $lx, $ly, $cx - $lx, $cy - $ly,
+                             $x, $y, $x, $ylimit;
+      $lx = $cx;
+      $ly = $cy;
+    }
+  }
+  $hits & 1;
+}
+
 sub rect_polar { (dist(@_), atan2($_[0], $_[1]) / pi * 180) }
 sub polar_rect { ($_[0] * sin($_[1] / 180 * pi),
                   $_[0] * cos($_[1] / 180 * pi)) }
