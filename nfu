@@ -123,12 +123,16 @@ sub line_opposite {
        * (($x2 - $x0) * $dy - ($y2 - $y0) * $dx) < 0;
 }
 
+sub evens(@) {local $_; @_[map $_ * 2,     0 .. $#_ >> 1]}
+sub odds(@)  {local $_; @_[map $_ * 2 + 1, 0 .. $#_ >> 1]}
+
 sub parse_wkt {
-  my @rings  = map [/([-0-9.]+)\s+([-0-9.]+)/g], split /\)\s*,\s*\(/, $_[0];
-  my $ylimit = 1 + max map max(@$_), @rings;
+  my @rings = map [/([-0-9.]+)\s+([-0-9.]+)/g], split /\)\s*,\s*\(/, $_[0];
   {
-    rings => [map [map $_ + 0, @$_], @rings],
-    ylimit => $ylimit
+    rings  => [map [map $_ + 0, @$_], @rings],
+    ylimit => 1 + max(map max(@$_), @rings),
+    bounds => [min(map evens(@$_), @rings), max(map evens(@$_), @rings),
+               min(map odds(@$_),  @rings), max(map odds(@$_),  @rings)],
   }
 }
 
@@ -136,6 +140,10 @@ sub in_poly {
   # Returns true if a point resides in the given parsed polygon.
   my ($x, $y, $parsed) = @_;
   my $ylimit = $parsed->{ylimit};
+  my @bounds = @{$parsed->{bounds}};
+  return 0 if $x < $bounds[0] || $x > $bounds[1]
+           || $y < $bounds[2] || $y > $bounds[3];
+
   my $hits = 0;
   for my $r (@{$parsed->{rings}}) {
     my ($lx, $ly) = @$r[0, 1];
