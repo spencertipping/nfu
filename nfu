@@ -14,7 +14,7 @@ use POSIX       qw/dup2 mkfifo setsid :sys_wait_h/;
 use File::Temp  qw/tmpnam/;
 use Math::Trig;
 
-use constant VERBOSE_INTERVAL        => 30;
+use constant VERBOSE_INTERVAL        => 50;
 use constant HADOOP_VERBOSE_INTERVAL => 250;
 use constant DELAY_BEFORE_VERBOSE    => 500;
 
@@ -488,7 +488,7 @@ sub be_verbose_as_appropriate {
                   $n_lines / $runtime,
                   $n_bytes / 1024,
                   $n_bytes / 1024 / $runtime,
-                  $verbose_command_formatted;
+                  substr($verbose_command_formatted, 0, 40);
   } else {
     # Use Hadoop-specific syntax to update job counters. Smaller units are
     # better because Hadoop counters are integers, so they'll suffer from
