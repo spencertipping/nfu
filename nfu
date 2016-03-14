@@ -1984,7 +1984,7 @@ my %functions = (
       chomp(my $cline = $line);
       my $p = $f->(split /\t/, $cline);
       unless (exists $fhs{$p}) {
-        my $cmdsub = $cmd =~ s/\{\}/$p/gr;
+        my $cmdsub = $cmd =~ s/\{\}/$p/gr =~ s/\{\.(\.*)\}/\{$1\}/gr;
         open $fhs{$p}, "| $cmdsub" or die "failed to launch $cmdsub: $!";
         push @open_partitions, $p;
       }
