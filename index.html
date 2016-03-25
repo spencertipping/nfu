@@ -1,0 +1,43 @@
+---
+---
+<!doctype html>
+<html>
+  <head>
+    <style>
+    </style>
+
+    <script>
+    </script>
+  </head>
+
+  <body>
+    {% for post in site.posts %}
+    <div class='post'>
+      <h2 class='title'></h2>
+
+      <div class='metadata'>
+        <div class='categories'>
+          {% if post.categories != empty %}
+            Categories
+            {% for category in post.categories %}
+            <span class='category'>{{ tag }}</span>
+            {% endfor %}
+          {% endif %}
+        </div>
+        <div class='tags'>
+          {% if post.tags != empty %}
+            Tags
+            {% for tag in post.tags %}
+              <span class='tag'><a href='{{ site.baseurl }}/tags/{{ tag | slugify }}'>{{ tag }}</a></span>
+            {% endfor %}
+          {% endif %}
+        </div>
+      </div>
+
+      <div class='content'>
+        <div class='excerpt'>{{ post.content }}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </body>
+</html>
