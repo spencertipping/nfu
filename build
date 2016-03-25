@@ -1,0 +1,5 @@
+#!/bin/bash
+
+jekyll build --drafts
+rm -rf docs/
+cp -r source/_site/ ./docs
