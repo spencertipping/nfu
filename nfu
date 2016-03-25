@@ -15,7 +15,7 @@ use File::Temp  qw/tmpnam/;
 use Math::Trig;
 
 use constant VERBOSE_INTERVAL        => 50;
-use constant HADOOP_VERBOSE_INTERVAL => 250;
+use constant HADOOP_VERBOSE_INTERVAL => 10000;
 use constant DELAY_BEFORE_VERBOSE    => 500;
 
 use constant SQL_INFER_PEEK_LINES    => 20;
