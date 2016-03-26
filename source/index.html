@@ -3,41 +3,51 @@
 <!doctype html>
 <html>
   <head>
-    <style>
-    </style>
-
-    <script>
-    </script>
+    {% include fonts.html %}
+    {% include scripts.html %}
+    {% include styles.html %}
   </head>
 
   <body>
-    {% for post in site.posts %}
-    <div class='post'>
-      <h2 class='title'></h2>
-
-      <div class='metadata'>
-        <div class='categories'>
-          {% if post.categories != empty %}
-            Categories
-            {% for category in post.categories %}
-            <span class='category'>{{ tag }}</span>
-            {% endfor %}
-          {% endif %}
+    <div class='page'>
+      {% include header.html %}
+      {% for post in site.posts %}
+      <div class='post'>
+        <div class='content'>
+          <div class='excerpt'>{{ post.content }}</div>
         </div>
-        <div class='tags'>
-          {% if post.tags != empty %}
-            Tags
-            {% for tag in post.tags %}
-              <span class='tag'><a href='{{ site.baseurl }}/tags/{{ tag | slugify }}'>{{ tag }}</a></span>
-            {% endfor %}
-          {% endif %}
-        </div>
-      </div>
 
-      <div class='content'>
-        <div class='excerpt'>{{ post.content }}</div>
+        <div class='headers'>
+          <div class='title'>{{ post.title }}</div>
+
+          <div class='flags'>
+            <span class='long-flag'>{{ post.long_flag }}</span>
+            <span class='short-flag'>{{ post.short_flag }}</span>
+          </div>
+
+          <div class='metadata'>
+            <div class='categories'>
+              {% if post.categories != empty %}
+                Categories:
+                {% for category in post.categories %}
+                <span class='category'>{{ category }}</span>
+                {% endfor %}
+              {% endif %}
+            </div>
+            <div class='tags'>
+              {% if post.tags != empty %}
+                Tags:
+                {% for tag in post.tags %}
+                  <span class='tag'>{{ tag }}</span>
+                {% endfor %}
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <div class='clear'></div>
       </div>
+      {% endfor %}
     </div>
-    {% endfor %}
   </body>
 </html>
