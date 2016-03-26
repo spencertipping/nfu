@@ -1,11 +1,19 @@
 ---
-command: number
-shorthand: n
+title: number
+long_flag: --number
+short_flag: -n
+categories:
+- commands
+tags:
+- common
+- easy
 ---
 
-Adds a first column of line numberings.
+*Description:*
 
-Try:
+Inserts a column of line numberings before the first column.
+
+*Examples:*
 
 ```
 nfu words -n
