@@ -11,7 +11,11 @@ tags:
 
 *Description:*
 
-Inserts a column of line numberings before the first column.
+Inserts a first column of line numberings.
+
+*Arguments:*
+
+None.
 
 *Examples:*
 

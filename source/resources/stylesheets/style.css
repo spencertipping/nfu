@@ -24,40 +24,46 @@ body * {
 }
 
 /* Posts */
-.post {
-  margin: 100px 0;
-  font: 16px 'Open Sans', sans-serif;
-}
+
+/** Page Structure **/
+.post { margin: 100px 0; }
+
+/** Two Column Structure **/
 .post .headers {
   width: 200px;
   padding-right: 75px;
-  text-align: right;
 }
 .post .content {
   width: 525px;
   float: right;
-  padding-top: 20px;
+  padding-top: 13px;
 }
 .post .clear { clear: both; }
 
+/** Post Headers **/
+.post .headers { text-align: right; }
 .post .title {
   font: 40px 'Roboto Condensed', sans serif;
   margin: -10px 0 10px;
+  text-transform: lowercase;
 }
 .post .flags {
   font: 20px Inconsolata, monospace;
   margin-bottom: 20px;
 }
-.post .content {
-  margin-bottom: 30px;
-}
-.post .metadata {
-  text-transform: lowercase;
-}
-.post p {
+.post .metadata { text-transform: lowercase; }
+
+/** Post Content **/
+.post .content { font: 16px 'Open Sans', sans-serif; }
+.post .content p {
   line-height: 20px;
   margin-bottom: 15px;
 }
-.post code {
-  font: 20px Inconsolata, monospace;
+.post .content code { font: 20px Inconsolata, monospace; }
+.post .content code a {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 2px dotted #ccc;
 }
+.post .content ul,
+.post .content ol { padding-left: 50px; }

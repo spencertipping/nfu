@@ -11,7 +11,11 @@ tags:
 
 *Description:*
 
-Appends data.
+Appends data to the current stream.
+
+*Arguments:*
+
+1 required: A pseudofile pattern.
 
 *Examples:*
 
