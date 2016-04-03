@@ -1,7 +1,7 @@
 ---
-title: order
-long_flag: --order
-short_flag: -o
+title: rgroup
+long_flag: --rgroup
+short_flag: -G
 categories:
 - commands
 tags:
@@ -11,7 +11,7 @@ tags:
 
 *Description:*
 
-Sorts ascending by numeric value.
+Sorts descending alphanumberically.
 
 *Arguments:*
 
@@ -20,6 +20,6 @@ Sorts ascending by numeric value.
 *Examples:*
 
 ```shell
-nfu random-numbers -o
-nfu n:20 -o  # Compare this with 'nfu n:20 -g'
+nfu words -G
+nfu random-numbers -w words -og 1
 ```

@@ -15,10 +15,10 @@ Sorts descending by numeric value.
 
 *Arguments:*
 
-None.
+1 optional: Column number (zero-indexed) to sort on.
 
 *Examples:*
 
-```
+```shell
 nfu random-numbers -O
 ```

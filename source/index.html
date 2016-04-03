@@ -11,6 +11,7 @@
       $(function() {
         $('.post pre code').each(function() {
           this.innerHTML = this.innerHTML.replace(/words/g, '<a href="{{ site.baseurl }}/resources/data/words">words</a>')
+          this.innerHTML = this.innerHTML.replace(/random-numbers/g, '<a href="{{ site.baseurl }}/resources/data/random-numbers">random-numbers</a>')
         });
       });
     </script>
