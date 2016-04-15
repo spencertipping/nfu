@@ -21,5 +21,10 @@ Sorts ascending by numeric value.
 
 ```shell
 nfu random-numbers -o
-nfu n:20 -o  # Compare this with 'nfu n:20 -g'
+
+# Compare this with "nfu n:20 -g"
+nfu n:20 -o
+
+# Sort events by day of month instead of year
+nfu events-1900s.tsv -o 2
 ```

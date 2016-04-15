@@ -12,6 +12,8 @@
         $('.post pre code').each(function() {
           this.innerHTML = this.innerHTML.replace(/words/g, '<a href="{{ site.baseurl }}/resources/data/words">words</a>')
           this.innerHTML = this.innerHTML.replace(/random-numbers/g, '<a href="{{ site.baseurl }}/resources/data/random-numbers">random-numbers</a>')
+          this.innerHTML = this.innerHTML.replace(/months/g, '<a href="{{ site.baseurl }}/resources/data/months">months</a>')
+          this.innerHTML = this.innerHTML.replace(/events-1900s.tsv/g, '<a href="{{ site.baseurl }}/resources/data/events-1900s.tsv">events-1900s.tsv</a>')
         });
       });
     </script>

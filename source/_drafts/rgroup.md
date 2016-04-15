@@ -11,7 +11,7 @@ tags:
 
 *Description:*
 
-Sorts descending alphanumberically.
+Sorts descending alphanumerically.
 
 *Arguments:*
 
@@ -20,6 +20,11 @@ Sorts descending alphanumberically.
 *Examples:*
 
 ```shell
-nfu words -G
-nfu random-numbers -w words -og 1
+nfu months -G
+
+# Compare this with "nfu n:20 -O"
+nfu n:20 -G
+
+# Groups the events by month, alphabetically descending
+nfu events-1900s.tsv -G
 ```

@@ -21,6 +21,10 @@ Sorts ascending alphanumerically.
 
 ```shell
 nfu months -g
-nfu n:20 -g  # Compare this with "nfu n:20 -o"
-nfu n:20 -w months -g 1
+
+# Compare this with "nfu n:20 -o"
+nfu n:20 -g
+
+# Groups the events by month, alphabetically ascending
+nfu events-1900s.tsv -g
 ```
