@@ -1,5 +1,3 @@
-source: source
-destination: source/_site
 baseurl: http://spencertipping.github.io/nfu/docs
 kramdown:
   input: GFM
