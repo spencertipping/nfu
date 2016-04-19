@@ -217,6 +217,11 @@ sub write_lines {
   $filename;
 }
 
+sub open_file {
+  open my $fh, expand_filename_shorthands $_[0], 1;
+  $fh;
+}
+
 sub json_encode {$json->encode(@_)}
 sub json_decode {$json->decode(@_)}
 
@@ -304,6 +309,8 @@ BEGIN {
   *rl = \&read_lines;
   *wf = \&write_file;
   *wl = \&write_lines;
+
+  *of = \&open_file;
 
   *ghe = \&geohash_encode;
   *ghd = \&geohash_decode;
