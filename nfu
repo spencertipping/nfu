@@ -40,6 +40,12 @@ $SIG{CHLD} = sub {
 # functions inside aggregators.
 use List::Util qw(first max maxstr min minstr reduce shuffle sum);
 
+sub prod {
+  my $p = 1;
+  $p *= $_ for @_;
+  $p;
+}
+
 # Same for this, which is especially useful from aggregators because multiple
 # values create multiple output rows, not multiple columns on the same output
 # row.
@@ -60,6 +66,26 @@ sub frequencies {
   my %freqs;
   ++$freqs{$_} for @_;
   %freqs;
+}
+
+sub reductions(&$@) {
+  my ($f, $x, @xs) = @_;
+  my @ys;
+  push @ys, $x = $f->($x, $_) for @xs;
+  @ys;
+}
+
+sub cp {
+  # Cartesian product of N arrays, each passed in as a ref
+  return ()                 if @_ == 0;
+  return map [$_], @{$_[0]} if @_ == 1;
+
+  my @ns     = map scalar(@$_), @_;
+  my @shifts = reverse reductions {$_[0] * $_[1]} 1 / $ns[0], reverse @ns;
+  map {
+    my $i = $_;
+    [map $_[$_][int($i / $shifts[$_]) % $ns[$_]], 0..$#_];
+  } 0..prod(@ns) - 1;
 }
 
 sub round_to {
