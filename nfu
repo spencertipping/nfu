@@ -1529,7 +1529,7 @@ my %functions = (
            '--eval', "xs = load(\"$temp\");"
                      . "save_precision(48);"
                      . "$commands;"
-                     . "save -text $temp xs";
+                     . "save -text $temp xs" and die "octave command failed";
 
     open $fh, '<', $temp;
     /^\s*#/ or
@@ -1547,14 +1547,35 @@ my %functions = (
     be_verbose_as_appropriate(length), print $fh $_ while <>;
     close $fh;
 
+    # Fix up the indentation for cases like this:
+    # $ nfu ... --numpy 'xs += 1
+    #                    xs *= 4'       # no real indent here
+    #
+    # $ nfu ... --numpy 'if something:
+    #                      xs += 1'     # minor indent here (assume 2)
+
+    my @lines   = split /\n/, $commands;
+    my @indents = map length(s/\S.*$//r), @lines;
+    my $indent  = @lines > 1 ? $indents[1] - $indents[0] : 0;
+
+    # If we're expecting an indentation of some amount after the first line, we
+    # need to be careful: we don't know how much the user decided to indent the
+    # block, and if we get it wrong then Python will complain at the next
+    # outdent. (If there's no outdent, then we can use anything.)
+    $indent = min $indent - 1, @indents[2..$#indents]
+      if $lines[0] =~ /:\s*(#.*)?$/ && @lines > 2;
+
+    my $spaces = ' ' x $indent;
+    $lines[$_] =~ s/^$spaces// for 1..$#lines;
+    $commands = join "\n", @lines;
+
     system 'python',
            '-c',
            "
 import numpy as np
 xs = np.loadtxt(\"$temp\")
 $commands
-np.savetxt(\"$temp\", xs, delimiter=\"\\t\")
-           ";
+np.savetxt(\"$temp\", xs, delimiter=\"\\t\")" and die "numpy command failed";
 
     open $fh, '<', $temp;
     /^\s*#/ or
