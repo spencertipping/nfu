@@ -663,6 +663,7 @@ my %arity = (
   http       => 1,
   repeat     => 2,
   octave     => 1,
+  numpy      => 1,
 );
 
 my %usages = (
@@ -724,6 +725,7 @@ my %usages = (
   http       => 'HTTP adapter for TCP server output',
   repeat     => 'repeat count, pseudofile to repeat',
   octave     => 'pipe through octave; vector is called xs',
+  numpy      => 'pipe through numpy; vector is called xs',
 );
 
 my %env_docs = (
@@ -1528,6 +1530,31 @@ my %functions = (
                      . "save_precision(48);"
                      . "$commands;"
                      . "save -text $temp xs";
+
+    open $fh, '<', $temp;
+    /^\s*#/ or
+    /^\s*$/ or
+    print join("\t", map $_ eq "NA" ? $_ : 0 + $_, grep length, split /\s+/),
+          "\n" while <$fh>;
+    close $fh;
+    unlink $temp;
+  },
+
+  numpy => sub {
+    my ($commands) = @_;
+    my $temp       = tmpnam;
+    open my $fh, '>', $temp or die $!;
+    be_verbose_as_appropriate(length), print $fh $_ while <>;
+    close $fh;
+
+    system 'python',
+           '-c',
+           "
+import numpy as np
+xs = np.loadtxt(\"$temp\")
+$commands
+np.savetxt(\"$temp\", xs, delimiter=\"\\t\")
+           ";
 
     open $fh, '<', $temp;
     /^\s*#/ or
