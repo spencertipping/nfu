@@ -1527,6 +1527,7 @@ my %functions = (
     system 'octave',
            '-q',
            '--eval', "xs = load(\"$temp\");"
+                     . "unlink(\"$temp\");"
                      . "save_precision(48);"
                      . "$commands;"
                      . "save -text $temp xs" and die "octave command failed";
