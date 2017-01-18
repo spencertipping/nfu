@@ -381,13 +381,13 @@ sub expand_filename_shorthands {
   } elsif ($f =~ /^s3:/) {
     # Use s3cmd and cat to stdout
     $result = "${original}s3cmd get '$f' - |";
-  } elsif ($f =~ s/^hdfs-ls://) {
+  } elsif ($f =~ s/^hdfs-ls:(?:\/\/)?//) {
     # Just list a directory. This is used by hdfs: below to provide
     # indirection.
     $result = "${original}$0 n:1 -m '"
             . q{map "hdfs:" . shell_quote($_), hadoop_ls %[q[} . $f . q{]%]}
             . "' |";
-  } elsif ($f =~ s/^hdfs://) {
+  } elsif ($f =~ s/^hdfs:(?:\/\/)?//) {
     # Use Hadoop commands to read stuff. The command itself needs to be
     # deferred because the hdfs path might not exist when the pseudofile is
     # resolved. Indirected through $0 hdfs-ls:X because some HDFS directories
@@ -1065,7 +1065,7 @@ sub hadoop_into {
   my @other_argv;
   while (@ARGV) {
     local $_ = unexpand_filename_shorthands shift @ARGV;
-    if (s/^hdfs://) {
+    if (s/^hdfs:(?:\/\/)?//) {
       push @input_files, '-input', $_;
     } else {
       push @other_argv, expand_filename_shorthands $_;
@@ -2082,7 +2082,7 @@ np.savetxt(\"$temp\", xs, delimiter=\"\\t\")" and die "numpy command failed";
     if ($outfile eq '.') {
       # Print output data to stdout, then delete outfile
       my $filename  = hadoop_tempfile;
-      my @partfiles = map s/^hdfs://r,
+      my @partfiles = map s/^hdfs:(?:\/\/)?//r,
                           hadoop_ls hadoop_into $filename, $mapper, $combiner, $reducer;
       open my $fh, "| xargs hadoop fs -text"
         or die "failed to execute xargs: $!";
@@ -2100,7 +2100,7 @@ np.savetxt(\"$temp\", xs, delimiter=\"\\t\")" and die "numpy command failed";
     if ($outfile eq '.') {
       # Print output data to stdout, then delete outfile
       my $filename  = hadoop_tempfile;
-      my @partfiles = map s/^hdfs://r,
+      my @partfiles = map s/^hdfs:(?:\/\/)?//r,
                           hadoop_ls hadoop_into $filename, $mapper, 'NONE', $reducer;
       open my $fh, "| xargs hadoop fs -text"
         or die "failed to execute xargs: $!";
