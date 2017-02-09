@@ -252,9 +252,9 @@ sub json_encode {$json->encode(@_)}
 sub json_decode {$json->decode(@_)}
 
 sub hadoop_counter {
-  printf STDERR "reporter:counter:%s,%s,%d\n", $_[0] =~ y/,/_/r,
-                                               $_[1] =~ y/,/_/r,
-                                               $_[2] // 1;
+  printf STDERR "reporter:counter:nfu,%s_%s,%d\n", $_[0] =~ y/,/_/r,
+                                                   $_[1] =~ y/,/_/r,
+                                                   $_[2] // 1;
 }
 
 sub F {my $l = shift @_; (split /\t/, $l)[@_]}
