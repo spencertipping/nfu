@@ -6,7 +6,7 @@ working on its successor [ni](https://github.com/spencertipping/ni).
 functions and source/sink adapters. For example, if you wanted to do a map-side
 inner join between a PostgreSQL table, a CSV from the Internet, and stuff on
 HDFS and gather the results into a sorted/uniqued text file:
-
+#intersting
 ```sh
 $ nfu sql:P@:'%*mytable' \
       -i0 @[ http://data.com/csv -F , ] \
